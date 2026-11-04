@@ -1,0 +1,30 @@
+{
+  "id": "daybreak",
+  "name": "晨光",
+  "desc": "浅色冷调。白蓝底 + 靛蓝星辉，白天长时间推演也不刺眼。",
+  "light": true,
+  "tokens": {
+    "--bg-0": "#eef1fa",
+    "--bg-1": "#e7ebf6",
+    "--bg-2": "#dee4f3",
+    "--surface": "rgba(24, 34, 80, 0.045)",
+    "--surface-2": "rgba(24, 34, 80, 0.07)",
+    "--surface-3": "rgba(24, 34, 80, 0.1)",
+    "--line": "rgba(24, 34, 80, 0.1)",
+    "--line-strong": "rgba(24, 34, 80, 0.2)",
+    "--fg-0": "#1b2340",
+    "--fg-1": "#3c4670",
+    "--fg-2": "#5c6690",
+    "--accent": "#4f63e8",
+    "--accent-2": "#8b5cf6",
+    "--ok": "#0d9488",
+    "--warn": "#d97706",
+    "--err": "#dc2626",
+    "--plane": "rgba(248, 250, 255, 0.78)",
+    "--plane-strong": "rgba(248, 250, 255, 0.92)",
+    "--plane-soft": "rgba(248, 250, 255, 0.55)",
+    "--shadow-lg": "0 24px 60px rgba(38, 50, 110, 0.22)"
+  },
+  "motion": { "speed": 1 },
+  "art": { "starfield": false, "aurora": true, "grain": true }
+}

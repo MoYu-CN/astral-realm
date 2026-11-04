@@ -1,0 +1,25 @@
+{
+  "id": "astral",
+  "name": "深空",
+  "desc": "默认主题。冷色星野，适合长时间阅读与推演。",
+  "tokens": {
+    "--bg-0": "#05060d",
+    "--bg-1": "#080a15",
+    "--bg-2": "#0e1120",
+    "--fg-0": "#f2f5ff",
+    "--fg-1": "#c9d2ee",
+    "--fg-2": "#9aa5c8",
+    "--accent": "#8b9cff",
+    "--accent-2": "#b98bff",
+    "--ok": "#5eead4",
+    "--warn": "#ffcf6b",
+    "--err": "#f09595",
+    "--plane": "rgba(9, 11, 20, 0.66)",
+    "--plane-strong": "rgba(9, 11, 20, 0.84)",
+    "--plane-soft": "rgba(9, 11, 20, 0.44)",
+    "--radius": "18px",
+    "--radius-sm": "11px"
+  },
+  "motion": { "speed": 1 },
+  "art": { "starfield": true, "aurora": true, "grain": true }
+}

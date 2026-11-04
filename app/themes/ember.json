@@ -1,0 +1,25 @@
+{
+  "id": "ember",
+  "name": "余烬",
+  "desc": "暖色主题。更陡的圆角、更慢的呼吸，像深夜里的一炉余火。",
+  "tokens": {
+    "--bg-0": "#0c0705",
+    "--bg-1": "#120b07",
+    "--bg-2": "#1b1109",
+    "--fg-0": "#fff3e6",
+    "--fg-1": "#e2c8ac",
+    "--fg-2": "#b39a80",
+    "--accent": "#ff9f6b",
+    "--accent-2": "#ff6b8a",
+    "--ok": "#a8d98a",
+    "--warn": "#ffd166",
+    "--err": "#ff7a7a",
+    "--plane": "rgba(20, 12, 8, 0.66)",
+    "--plane-strong": "rgba(20, 12, 8, 0.84)",
+    "--plane-soft": "rgba(20, 12, 8, 0.44)",
+    "--radius": "10px",
+    "--radius-sm": "7px"
+  },
+  "motion": { "speed": 0.75 },
+  "art": { "starfield": true, "aurora": false, "grain": true }
+}

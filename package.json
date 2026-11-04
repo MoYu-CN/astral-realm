@@ -1,0 +1,50 @@
+{
+  "name": "astral-realm",
+  "productName": "星界",
+  "version": "0.1.0",
+  "private": true,
+  "description": "多 Agent、多模型协作桌面工作台。轻量、开源、可高度定制。",
+  "main": "electron/main.js",
+  "type": "commonjs",
+  "scripts": {
+    "start": "node scripts/dev.js",
+    "pack": "node scripts/package.js",
+    "mcp": "node electron/astral-mcp.js",
+    "doctor": "node scripts/doctor.js",
+    "test": "node scripts/test.js",
+    "migrate:plugins": "node scripts/migrate-plugins.js",
+    "smoke:approval": "node scripts/smoke-approval.js",
+    "smoke:ui": "node scripts/smoke-ui.js",
+    "smoke:fold": "node scripts/smoke-fold.js",
+    "shot:splash": "node scripts/shot-splash.js",
+    "probe:splash": "node scripts/probe-splash.js",
+    "probe:splash-theme": "node scripts/probe-splash-theme.js",
+    "check": "node scripts/test.js && node scripts/doctor.js",
+    "mock": "node scripts/mock-llm.js",
+    "shot:themes": "node scripts/shot-themes.js",
+    "probe:theme": "node scripts/probe-theme.js",
+    "probe:theme-clash": "node scripts/probe-theme-clash.js",
+    "probe:splash-flight": "node scripts/probe-splash-flight.js",
+    "shot:brand": "node scripts/shot-brand.js",
+    "probe:brand-idle": "node scripts/probe-brand-idle.js",
+    "probe:triggers": "node scripts/probe-triggers.js",
+    "probe:sfx": "node scripts/probe-sfx.js",
+    "sfx:preview": "node scripts/render-sfx-preview.js",
+    "promo": "node scripts/render-promo.js promo/index.html promo/星界-宣传片.mp4 16.4",
+    "promo:audio": "node scripts/render-promo.js promo/index.html promo/星界-宣传片-音轨.wav 16.4 wav",
+    "promo:verify": "node scripts/verify-promo.js promo/星界-宣传片.mp4",
+    "probe:promo-audio": "node scripts/probe-promo-audio.js promo/星界-宣传片-音轨.wav",
+    "prompts:measure": "node scripts/measure-prompts.js"
+  },
+  "keywords": [
+    "multi-agent",
+    "mcp",
+    "electron",
+    "llm",
+    "astral"
+  ],
+  "license": "MIT",
+  "devDependencies": {
+    "electron": "^45.2.1"
+  }
+}

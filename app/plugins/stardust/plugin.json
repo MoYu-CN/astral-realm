@@ -1,0 +1,26 @@
+{
+  "id": "stardust",
+  "name": "星砂",
+  "version": "1.0.0",
+  "apiVersion": 1,
+  "description": "示例插件：注册一套暖沙主题、一个「简报体」技能，并在成员空回复时兜底。",
+  "entry": "plugin.js",
+  "runtime": "isolated",
+  "author": "astral",
+  "defaultEnabled": true,
+  "permissions": [
+    "themes",
+    "skills",
+    "hooks",
+    "settings"
+  ],
+  "settings": [
+    {
+      "key": "fallbackText",
+      "label": "空回复兜底文案",
+      "type": "text",
+      "default": "本轮没有产出内容；可能是模型只返回了思考/派单内容，或响应被截断。",
+      "hint": "成员回复为空时插入的提示；保存后立即生效。"
+    }
+  ]
+}

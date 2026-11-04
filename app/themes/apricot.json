@@ -1,0 +1,32 @@
+{
+  "id": "apricot",
+  "name": "杏日",
+  "desc": "浅色暖调。奶油纸面 + 杏橙点缀，像午后晒着太阳写东西。",
+  "light": true,
+  "tokens": {
+    "--bg-0": "#fbf4ea",
+    "--bg-1": "#f6ecdd",
+    "--bg-2": "#f0e2cb",
+    "--surface": "rgba(96, 62, 24, 0.05)",
+    "--surface-2": "rgba(96, 62, 24, 0.08)",
+    "--surface-3": "rgba(96, 62, 24, 0.11)",
+    "--line": "rgba(96, 62, 24, 0.11)",
+    "--line-strong": "rgba(96, 62, 24, 0.2)",
+    "--fg-0": "#3a2a18",
+    "--fg-1": "#5d4629",
+    "--fg-2": "#7c6446",
+    "--accent": "#c26a1a",
+    "--accent-2": "#c73e5d",
+    "--ok": "#3f8f57",
+    "--warn": "#a86e0b",
+    "--err": "#c63a3a",
+    "--plane": "rgba(255, 251, 244, 0.78)",
+    "--plane-strong": "rgba(255, 251, 244, 0.92)",
+    "--plane-soft": "rgba(255, 251, 244, 0.55)",
+    "--radius": "12px",
+    "--radius-sm": "8px",
+    "--shadow-lg": "0 24px 60px rgba(120, 78, 30, 0.2)"
+  },
+  "motion": { "speed": 0.85 },
+  "art": { "starfield": false, "aurora": true, "grain": true }
+}

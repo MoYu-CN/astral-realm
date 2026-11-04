@@ -1,0 +1,79 @@
+<!doctype html>
+<meta charset="utf-8">
+<title>宣传片抽帧核对</title>
+<style>html,body{margin:0;background:#000}video{position:fixed;left:0;top:0;width:2px;height:2px;opacity:0}</style>
+<video id="v" muted preload="auto"></video>
+<script>
+const v = document.getElementById('v')
+const qs = new URLSearchParams(location.search)
+const src = decodeURIComponent(qs.get('src') || '')
+const file = decodeURIComponent(qs.get('file') || '')
+v.src = src
+v.onerror = () => window.promo.meta({ error: 'video load error' })
+
+function onsets (buf, rate) {
+  const d = buf.getChannelData(0)
+  const win = Math.round(rate * 0.02)
+  const env = []
+  let peak = 0
+  for (let i = 0; i < d.length; i += win) {
+    let m = 0
+    for (let j = i; j < Math.min(i + win, d.length); j++) m = Math.max(m, Math.abs(d[j]))
+    env.push(m); if (m > peak) peak = m
+  }
+  const out = []
+  for (let i = 1; i < env.length; i++) {
+    if (env[i] > peak * 0.08 && env[i] > env[i - 1] * 1.8) {
+      const t = i * win / rate
+      if (!out.length || t - out[out.length - 1] > 0.09) out.push(+t.toFixed(2))
+    }
+  }
+  let sum = 0
+  for (let i = 0; i < d.length; i++) sum += d[i] * d[i]
+  return { peak, rms: Math.sqrt(sum / d.length), onsets: out, seconds: d.length / rate }
+}
+
+v.onloadedmetadata = async () => {
+  let audio = null
+  try {
+    const ab = await window.promo.read(file)
+    const ac = new AudioContext({ sampleRate: 48000 })
+    const buf = await ac.decodeAudioData(ab)
+    audio = onsets(buf, buf.sampleRate)
+    ac.close()
+  } catch (err) {
+    audio = { error: String(err && err.message) }
+  }
+  window.promo.meta({
+    duration: v.duration,
+    width: v.videoWidth,
+    height: v.videoHeight,
+    audio
+  })
+  const ts = (qs.get('ts') || '1.2,4.2,7.6,11.6,14.8').split(',').map(Number)
+  const cv = document.createElement('canvas')
+  cv.width = v.videoWidth; cv.height = v.videoHeight
+  const g2 = cv.getContext('2d')
+  /* 用播放 + rVFC 取帧：分片 MP4 的 seek 会落到关键帧，抽帧时间不准 */
+  await v.play().catch(() => {})
+  let idx = 0
+  await new Promise((resolve) => {
+    const step = (_now, meta) => {
+      const ct = meta && typeof meta.mediaTime === 'number' ? meta.mediaTime : v.currentTime
+      while (idx < ts.length && ct >= ts[idx]) {
+        g2.drawImage(v, 0, 0)
+        window.promo.frame(ts[idx], cv.toDataURL('image/png'))
+        console.log('[frame] 目标 ' + ts[idx] + 's 实际 ' + ct.toFixed(2) + 's')
+        idx++
+      }
+      if (idx >= ts.length) return resolve()
+      if (v.requestVideoFrameCallback) v.requestVideoFrameCallback(step)
+      else setTimeout(() => step(null, null), 30)
+    }
+    if (v.requestVideoFrameCallback) v.requestVideoFrameCallback(step)
+    else step(null, null)
+    setTimeout(resolve, 30000)
+  })
+  window.promo.done()
+}
+</script>

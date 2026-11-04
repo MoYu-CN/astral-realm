@@ -1,0 +1,30 @@
+{
+  "id": "skyline",
+  "name": "青空",
+  "desc": "浅色青调。薄荷天空底 + 湖蓝高光，轻快干净，适合高强度问答。",
+  "light": true,
+  "tokens": {
+    "--bg-0": "#eaf6f8",
+    "--bg-1": "#e0eff3",
+    "--bg-2": "#d3e7ee",
+    "--surface": "rgba(12, 60, 74, 0.045)",
+    "--surface-2": "rgba(12, 60, 74, 0.07)",
+    "--surface-3": "rgba(12, 60, 74, 0.1)",
+    "--line": "rgba(12, 60, 74, 0.1)",
+    "--line-strong": "rgba(12, 60, 74, 0.2)",
+    "--fg-0": "#0f2f3a",
+    "--fg-1": "#2b5563",
+    "--fg-2": "#4c7280",
+    "--accent": "#0284c7",
+    "--accent-2": "#0d9488",
+    "--ok": "#059669",
+    "--warn": "#ca8a04",
+    "--err": "#dc2626",
+    "--plane": "rgba(247, 253, 254, 0.78)",
+    "--plane-strong": "rgba(247, 253, 254, 0.92)",
+    "--plane-soft": "rgba(247, 253, 254, 0.55)",
+    "--shadow-lg": "0 24px 60px rgba(20, 80, 100, 0.2)"
+  },
+  "motion": { "speed": 1.1 },
+  "art": { "starfield": false, "aurora": true, "grain": true }
+}

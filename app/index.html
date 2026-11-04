@@ -1,0 +1,239 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8">
+  <meta http-equiv="Content-Security-Policy" content="default-src 'self' astral:; img-src 'self' astral: data: https:; style-src 'self' 'unsafe-inline' astral:; script-src 'self' astral:; connect-src 'self' astral:;">
+  <title>星界</title>
+  <link rel="icon" href="assets/astral-icon.png" type="image/png">
+  <link rel="stylesheet" href="css/tokens.css">
+  <link rel="stylesheet" href="css/app.css">
+</head>
+<body class="booting">
+  <!-- 首帧前把上次生效的主题写进 :root：启动动画也是主题配色（同步脚本，必须排在 splash 之前） -->
+  <script src="js/pretheme.js"></script>
+
+  <canvas id="fx-stars" class="fx-stars" aria-hidden="true"></canvas>
+  <div class="fx-aurora" id="fx-aurora" aria-hidden="true"><span></span><span></span><span></span></div>
+  <div class="fx-grain" id="fx-grain" aria-hidden="true"></div>
+
+  <!-- 启动动画：彗星沿任务轨迹式路线飞越两颗导航星，第三颗星点亮成 Logo
+       （星尘汇聚 → 星体成形 → 光弧绕行 → 星核点亮）→ 飞入品牌位（splash.js 收场）
+       图标拆成独立图层分别入场，最后合成为左侧栏那个流星标记。 -->
+  <div class="splash" id="splash" role="status" aria-label="星界正在启动">
+    <div class="splash-bg" aria-hidden="true"></div>
+    <div class="splash-veil" aria-hidden="true"></div>
+    <i class="splash-stars far" aria-hidden="true"></i>
+    <i class="splash-stars near" aria-hidden="true"></i>
+    <canvas class="splash-star-canvas" id="splash-stars-canvas" aria-hidden="true"></canvas>
+
+    <!-- 流星轨迹：彗星从屏幕外掠入，依次点亮两颗导航星，尾迹同步描出；
+         第三次落点即中心，彗星汇入 Logo（轨迹终点由 splash.js 实测流星位置校准） -->
+    <svg class="splash-trail" aria-hidden="true" preserveAspectRatio="none">
+      <line class="t1" x1="68%" y1="28%" x2="26%" y2="64%" pathLength="100"/>
+      <line class="t2" x1="26%" y1="64%" x2="50%" y2="45.5%" pathLength="100"/>
+    </svg>
+    <i class="splash-waypoint w1" aria-hidden="true"></i>
+    <i class="splash-waypoint w2" aria-hidden="true"></i>
+    <i class="splash-comet" aria-hidden="true"></i>
+
+    <div class="splash-core">
+      <div class="splash-meteor" aria-hidden="true">
+        <i class="splash-halo"></i>
+        <i class="splash-shock"></i>
+        <i class="splash-orbit o1"></i>
+        <i class="splash-orbit o2"></i>
+
+        <svg class="splash-glyph" viewBox="0 0 36 36" width="104" height="104" fill="none">
+          <defs>
+            <radialGradient id="spHalo" cx="18" cy="18" r="18" gradientUnits="userSpaceOnUse">
+              <stop offset="0" stop-color="#F1E4FF" stop-opacity=".45"/>
+              <stop offset=".3" stop-color="#D2BAFF" stop-opacity=".24"/>
+              <stop offset=".66" stop-color="#AC8AEA" stop-opacity=".07"/>
+              <stop offset="1" stop-color="#8F6BD4" stop-opacity="0"/>
+            </radialGradient>
+            <radialGradient id="spBody" cx="18" cy="17.1" r="15.2" gradientUnits="userSpaceOnUse">
+              <stop offset="0" stop-color="#FBF4FF"/>
+              <stop offset=".08" stop-color="#F3E4FF"/>
+              <stop offset=".22" stop-color="#E5CEFF"/>
+              <stop offset=".42" stop-color="#D2B3FF"/>
+              <stop offset=".62" stop-color="#BE99F4"/>
+              <stop offset=".82" stop-color="#A77FE2"/>
+              <stop offset="1" stop-color="#8C67CA"/>
+            </radialGradient>
+            <radialGradient id="spCore" cx="17.6" cy="16.8" r="3.8" gradientUnits="userSpaceOnUse">
+              <stop offset="0" stop-color="#F8EDFF"/>
+              <stop offset=".3" stop-color="#ECD8FF"/>
+              <stop offset=".6" stop-color="#DCC2FF"/>
+              <stop offset=".85" stop-color="#C6A6F2"/>
+              <stop offset="1" stop-color="#C6A6F2" stop-opacity="0"/>
+            </radialGradient>
+            <radialGradient id="spDiag" cx="18" cy="18" r="9.2" gradientUnits="userSpaceOnUse">
+              <stop offset="0" stop-color="#F4E9FF" stop-opacity=".62"/>
+              <stop offset=".55" stop-color="#D7C0FF" stop-opacity=".42"/>
+              <stop offset="1" stop-color="#B494EE" stop-opacity=".28"/>
+            </radialGradient>
+            <linearGradient id="spArc" x1="7" y1="16" x2="18" y2="7" gradientUnits="userSpaceOnUse">
+              <stop offset="0" stop-color="#C7ABFF" stop-opacity="0"/>
+              <stop offset=".35" stop-color="#D8C5FF" stop-opacity=".5"/>
+              <stop offset=".75" stop-color="#EEE4FF" stop-opacity=".8"/>
+              <stop offset="1" stop-color="#D3BDFF" stop-opacity="0"/>
+            </linearGradient>
+            <filter id="spSoft" x="-60%" y="-60%" width="220%" height="220%">
+              <feGaussianBlur stdDeviation="2.4"/>
+            </filter>
+          </defs>
+
+          <circle class="g-halo" cx="18" cy="18" r="18" fill="url(#spHalo)"/>
+          <path class="g-glow" d="M18 3.8 C18.5 12.4 19.4 15.9 32.4 18 C19.4 20.1 18.5 23.6 18 32.2 C17.5 23.6 16.6 20.1 3.6 18 C16.6 15.9 17.5 12.4 18 3.8 Z"
+                fill="#B79AF1" opacity=".3" filter="url(#spSoft)"/>
+
+          <g class="g-spike">
+            <path d="M18 8.6 C18.35 14.2 20.2 16.05 25.65 18 C20.2 19.95 18.35 21.8 18 27.4 C17.65 21.8 15.8 19.95 10.35 18 C15.8 16.05 17.65 14.2 18 8.6 Z"
+                  fill="url(#spDiag)"/>
+          </g>
+
+          <g class="g-arc-orbit">
+            <path d="M7.0 15.2 A11.2 11.2 0 0 1 19.4 6.9"
+                  fill="none" stroke="#C7ABFF" stroke-width="2.4" stroke-linecap="round" opacity=".1"/>
+            <path class="g-arc" pathLength="100" d="M7.0 15.2 A11.2 11.2 0 0 1 19.4 6.9"
+                  fill="none" stroke="url(#spArc)" stroke-width=".8" stroke-linecap="round"/>
+          </g>
+
+          <path class="g-body" d="M18 3.8 C18.5 12.4 19.4 15.9 32.4 18 C19.4 20.1 18.5 23.6 18 32.2 C17.5 23.6 16.6 20.1 3.6 18 C16.6 15.9 17.5 12.4 18 3.8 Z"
+                fill="url(#spBody)"/>
+
+          <circle class="g-core" cx="17.8" cy="17.2" r="3.8" fill="url(#spCore)"/>
+          <circle class="g-glint" cx="16.4" cy="15.8" r=".95" fill="#FFFFFF" opacity=".85"/>
+        </svg>
+
+        <i class="splash-sparks">
+          <i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i>
+        </i>
+      </div>
+
+      <div class="splash-word">
+        <strong><span>星</span><span>界</span></strong>
+        <span class="splash-sub">ASTRAL REALM</span>
+      </div>
+      <div class="splash-bar" aria-hidden="true"><i></i></div>
+      <div class="splash-status" id="splash-status">正在唤醒星野…</div>
+    </div>
+  </div>
+
+  <div class="shell">
+    <aside class="rail">
+      <div class="brand">
+        <div class="brand-mark" aria-hidden="true"><img src="assets/astral-meteor.svg" alt=""></div>
+        <div class="brand-text">
+          <strong>星界</strong>
+          <span>ASTRAL REALM</span>
+        </div>
+      </div>
+      <div class="project-tree" id="project-tree"></div>
+      <div class="rail-scroll" id="roster"></div>
+      <div class="rail-foot">
+        <button class="ghost-btn" id="btn-settings">设 置</button>
+        <button class="ghost-btn" id="btn-clear">新对话</button>
+      </div>
+    </aside>
+
+    <div class="resizer" id="resizer-rail" data-target="rail" title="拖动调整宽度 · 双击复位"></div>
+
+    <main class="stage">
+      <header class="topbar">
+        <div class="view-switch" id="view-switch" role="tablist" aria-label="会话视图切换">
+          <button class="view-tab" type="button" data-view="user" role="tab" aria-selected="true">用户 ↔ AI</button>
+          <button class="view-tab" type="button" data-view="agent" role="tab" aria-selected="false">AI ↔ AI</button>
+          <i class="view-indicator" aria-hidden="true"></i>
+        </div>
+        <div class="channel">
+          <div class="channel-head">
+            <h1 id="channel-name">协作频道</h1>
+            <button class="channel-edit" id="channel-edit" hidden title="查看并编辑这个成员的资料">成员资料</button>
+          </div>
+          <p id="channel-sub">等待指令</p>
+        </div>
+        <div class="topbar-actions">
+          <button class="chip" id="btn-mode" title="工作模式">标准会话</button>
+          <button class="chip" id="btn-renew" title="总结当前会话，开启干净上下文的新会话">革新</button>
+          <button class="chip" id="btn-search" title="搜索当前项目会话（Ctrl+K）">搜索</button>
+          <button class="chip" id="btn-theme">主题</button>
+          <button class="chip" id="btn-dock">面板</button>
+          <span class="bridge" id="bridge-badge" title="MCP 桥接状态">
+            <i class="node"></i>
+            <i class="beam"></i>
+            <i class="node"></i>
+            <span class="bridge-label">MCP</span>
+          </span>
+        </div>
+        <div class="win-controls">
+          <button id="win-min" title="最小化" aria-label="最小化">–</button>
+          <button id="win-max" title="最大化" aria-label="最大化">□</button>
+          <button id="win-close" title="关闭" aria-label="关闭">✕</button>
+        </div>
+      </header>
+
+      <div class="stream" id="stream"></div>
+
+      <footer class="composer">
+        <div class="composer-inner">
+          <div class="copy-draft" id="copy-draft" hidden>
+            <span class="copy-draft-label" id="copy-draft-label">正在修改提问 · 原提问已撤回</span>
+            <button type="button" id="copy-draft-cancel">取消</button>
+          </div>
+          <div class="attach-row" id="attach-row" hidden></div>
+          <textarea id="input" rows="1" placeholder="下达指令…（Enter 发送，Shift + Enter 换行）"></textarea>
+          <div class="composer-bar">
+            <div class="toolbar" id="toolbar">
+              <span class="composer-hints" id="composer-hints"></span>
+              <span class="toolbar-sep" aria-hidden="true"></span>
+              <button class="tool" id="tool-perm" data-icon="shield"><span class="tool-label">权限</span></button>
+              <button class="tool" id="tool-file" data-icon="clip"><span class="tool-label">文件</span></button>
+              <button class="tool" id="tool-data" data-icon="db"><span class="tool-label">数据</span></button>
+              <button class="tool" id="tool-model" data-icon="chip"><span class="tool-label">模型</span></button>
+              <button class="tool" id="tool-voice" data-icon="mic"><span class="tool-label">语音</span></button>
+              <button class="tool" id="tool-enhance" data-icon="spark"><span class="tool-label">强化</span></button>
+              <div class="think" id="think">
+                <span class="think-name">思考</span>
+                <div class="think-slider">
+                  <input type="range" id="think-range" min="0" max="100" step="1" value="50"
+                         aria-label="思考强度" title="拖动调整思考强度">
+                  <canvas class="think-stars" id="think-stars-canvas" aria-hidden="true"></canvas>
+                </div>
+                <span class="think-value" id="think-value">均衡</span>
+              </div>
+            </div>
+            <div class="send-wrap">
+              <button class="send-btn" id="btn-send">发送</button>
+              <button class="ctx-meter" id="ctx-meter" type="button" title="上下文用量" aria-label="上下文用量">
+                <svg viewBox="0 0 32 32" width="30" height="30" aria-hidden="true">
+                  <circle class="ctx-track" cx="16" cy="16" r="12.7"></circle>
+                  <circle class="ctx-fill" id="ctx-fill" cx="16" cy="16" r="12.7"
+                          transform="rotate(-90 16 16)"></circle>
+                </svg>
+                <span class="ctx-meter-value" id="ctx-meter-value">0%</span>
+              </button>
+            </div>
+          </div>
+        </div>
+      </footer>
+    </main>
+
+    <div class="resizer" id="resizer-dock" data-target="dock" title="拖动调整宽度 · 双击复位"></div>
+
+    <aside class="dock" id="dock">
+      <div class="dock-tabs" id="dock-tabs">
+        <button data-pane="tasks" class="active">任务</button>
+        <button data-pane="context">上下文</button>
+        <button data-pane="plugins">插件</button>
+      </div>
+      <div class="dock-body" id="dock-body"></div>
+    </aside>
+  </div>
+
+  <div class="modal-root" id="modal-root"></div>
+  <div class="toast-root" id="toast-root"></div>
+
+  <script type="module" src="js/main.js"></script>
+</body>
+</html>

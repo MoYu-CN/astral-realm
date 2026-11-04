@@ -1,0 +1,32 @@
+<!doctype html>
+<meta charset="utf-8">
+<title>星界 · 启动音效试听（铃铛版）</title>
+<style>
+  body{margin:0;padding:40px;background:#0b0a14;color:#eef0ff;font-family:system-ui,"Microsoft YaHei",sans-serif;line-height:1.7}
+  .wrap{max-width:760px;margin:0 auto}
+  h1{font-size:22px;font-weight:500;margin:0 0 6px}
+  .sub{color:#a5abce;font-size:14px;margin:0 0 26px}
+  audio{width:100%;margin:0 0 26px}
+  .card{background:rgba(26,23,48,.78);border:1px solid rgba(168,158,255,.18);border-radius:12px;padding:18px 22px;margin-bottom:16px}
+  h2{font-size:15px;font-weight:500;margin:0 0 12px;color:#b9a8ff}
+  table{width:100%;border-collapse:collapse;font-size:13px}
+  td{padding:6px 0;border-bottom:1px solid rgba(168,158,255,.10);color:#c9cde8}
+  td:first-child{width:92px;color:#5eead4;font-family:ui-monospace,Consolas,monospace}
+  tr:last-child td{border-bottom:none}
+  .hint{color:#8b91b5;font-size:12px;margin-top:14px}
+</style>
+<div class="wrap">
+  <h1>星界 · 启动音效试听</h1>
+  <p class="sub">只有三声清脆的铃 · 3.2 秒 · 44.1kHz 单声道 · 与应用内实际音色一致</p>
+  <audio controls preload="auto" src="./启动音效-铃铛版.wav"></audio>
+
+  <div class="card">
+    <h2>彗星航程里只有这三声</h2>
+    <table>
+      <tr><td>0.37s</td><td>第一声 · 抵达导航星①，E6</td></tr>
+      <tr><td>0.76s</td><td>第二声 · 抵达导航星②，A6，更高更亮</td></tr>
+      <tr><td>1.09s</td><td>第三声 · 抵达第三颗星（Logo 落点），C7</td></tr>
+    </table>
+    <p class="hint">1.1 秒之后全部安静：Logo 飞到左上角、落地交接、界面操作都不发声。每声都是单个铃体，约 1ms 起音、带金属余韵。应用里可在 设置 → 外观 → 音效 单独试听、调音量或关闭。</p>
+  </div>
+</div>

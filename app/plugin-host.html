@@ -1,0 +1,373 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8">
+  <meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src 'unsafe-inline' blob:; connect-src 'none'; img-src 'none'; style-src 'unsafe-inline'">
+  <title>Plugin Sandbox</title>
+  <style>html,body{margin:0;padding:0;background:transparent;color:inherit;font:inherit}</style>
+</head>
+<body>
+<script>
+/* 沙箱里的插件引导脚本：只通过 postMessage 与宿主通信。
+ *
+ * 这里是「原生沙箱 UI」的运行时：
+ *   - 宿主注入应用样式与主题变量，插件用同一套组件类，外观与主界面一致；
+ *   - ui.modal / ui.confirm 在 iframe 内渲染，打开时宿主把整个 iframe 提升为
+ *     全窗口浮层（sheet），关闭后还原到 dock 面板的槽位；
+ *   - project / chat / clipboard / knowledge 都是受限桥，权限由宿主校验。
+ */
+
+(function () {
+  let channel = ''
+  let started = false
+  let manifest = null
+  const settingsListeners = new Set()
+  const projectListeners = new Set()
+  const hooks = new Map()
+  const pendingRequests = new Map()
+  let requestSeq = 0
+  const paneHosts = new Map()
+  let activePaneId = ''
+  let modalRoot = null
+  let modalOnClose = null
+  let project = { id: '', name: '默认项目' }
+  let themeStyle = null
+  let config = {}
+
+  function currentProject () {
+    return { id: project.id || '', name: project.name || '默认项目' }
+  }
+
+  function h (tag, attrs) {
+    var el = document.createElement(tag)
+    var options = attrs || {}
+    Object.keys(options).forEach(function (key) {
+      var value = options[key]
+      if (value == null) return
+      if (key === 'class') el.className = String(value)
+      else if (key === 'text') el.textContent = String(value)
+      else if (key === 'style' && typeof value === 'object') Object.assign(el.style, value)
+      else if (key === 'dataset' && typeof value === 'object') Object.keys(value).forEach(function (k) { el.dataset[k] = String(value[k]) })
+      else if (/^on[a-z]+$/i.test(key) && typeof value === 'function') el.addEventListener(key.slice(2).toLowerCase(), value)
+      else el.setAttribute(key, String(value))
+    })
+    for (var i = 2; i < arguments.length; i++) {
+      var child = arguments[i]
+      if (child == null || child === false) continue
+      el.append(child.nodeType ? child : document.createTextNode(String(child)))
+    }
+    return el
+  }
+
+  const send = (kind, extra) => {
+    if (!channel) return
+    parent.postMessage({ channel: channel, kind: kind, ...(extra || {}) }, '*')
+  }
+
+  function request (kind, extra) {
+    return new Promise(function (resolve, reject) {
+      var id = 'k' + (++requestSeq)
+      var timer = setTimeout(function () {
+        pendingRequests.delete(id)
+        reject(new Error('插件请求超时'))
+      }, 20000)
+      pendingRequests.set(id, { resolve: resolve, reject: reject, timer: timer })
+      send(kind, { id: id, ...(extra || {}) })
+    })
+  }
+
+  /* ---------------------------------------------------------- modal */
+
+  function closeModal (notify) {
+    if (!modalRoot) return
+    var root = modalRoot
+    modalRoot = null
+    var callback = modalOnClose
+    modalOnClose = null
+    if (root.__esc) document.removeEventListener('keydown', root.__esc)
+    root.remove()
+    send('sheet', { open: false })
+    if (notify && typeof callback === 'function') {
+      try { callback() } catch (err) { console.error(err) }
+    }
+  }
+
+  function openModal (options) {
+    if (modalRoot) closeModal(false)
+    options = options || {}
+    var body = h('div', { class: 'modal-body' })
+    var panel = h('div', { class: 'modal', style: { width: 'min(' + (Number(options.width) || 760) + 'px, 92vw)' } },
+      h('div', { class: 'modal-head' },
+        h('div', {},
+          h('h2', { text: String(options.title || '') }),
+          options.sub ? h('div', { class: 'sub', text: String(options.sub) }) : null
+        ),
+        h('button', { class: 'close-btn', type: 'button', onclick: function () { closeModal(true) } }, '✕')
+      ),
+      body
+    )
+    var root = h('div', { id: 'modal-root', class: 'modal-root open' },
+      h('div', { class: 'modal-backdrop', onclick: function () { closeModal(true) } }),
+      panel
+    )
+    modalOnClose = typeof options.onClose === 'function' ? options.onClose : null
+    document.body.appendChild(root)
+    modalRoot = root
+    send('sheet', { open: true })
+    if (typeof options.render === 'function') options.render(body, null)
+    var onKey = function (event) {
+      if (event.key !== 'Escape') return
+      document.removeEventListener('keydown', onKey)
+      closeModal(true)
+    }
+    root.__esc = onKey
+    document.addEventListener('keydown', onKey)
+    return {
+      body: body,
+      close: function () { closeModal(false) }
+    }
+  }
+
+  function confirmDialog (options) {
+    options = options || {}
+    return new Promise(function (resolve) {
+      var settled = false
+      var finish = function (value) {
+        if (settled) return
+        settled = true
+        closeModal(false)
+        resolve(Boolean(value))
+      }
+      openModal({
+        title: options.title || '请确认',
+        sub: options.sub || '',
+        width: Number(options.width) || 520,
+        onClose: function () { finish(false) },
+        render: function (body) {
+          body.append(
+            h('div', { style: { color: 'var(--fg-1)', fontSize: 'calc(13px * var(--ui-scale))', lineHeight: '1.8', whiteSpace: 'pre-wrap' }, text: String(options.message || '') }),
+            h('div', { class: 'btn-row', style: { justifyContent: 'flex-end', marginTop: '20px' } },
+              h('button', {
+                class: 'btn ' + (options.danger ? 'danger' : 'primary'),
+                type: 'button',
+                text: String(options.confirmText || '确定'),
+                onclick: function () { finish(true) }
+              }),
+              h('button', {
+                class: 'btn ghost',
+                type: 'button',
+                text: String(options.cancelText || '取消'),
+                onclick: function () { finish(false) }
+              })
+            )
+          )
+        }
+      })
+    })
+  }
+
+  /* ------------------------------------------------------------ api */
+
+  const api = {
+    version: '',
+    manifest: null,
+    log: function () {
+      send('log', { args: Array.prototype.map.call(arguments, function (item) { return String(item) }) })
+    },
+    h: h,
+    toast: function (text) { send('toast', { text: String(text) }) },
+    settings: {
+      get: function () { return { ...config } },
+      set: function (patch) { return request('settings-set', { patch: patch || {} }) },
+      onChange: function (fn) {
+        settingsListeners.add(fn)
+        return function () { settingsListeners.delete(fn) }
+      }
+    },
+    project: {
+      current: currentProject,
+      onChange: function (fn) {
+        if (typeof fn !== 'function') return function () {}
+        projectListeners.add(fn)
+        return function () { projectListeners.delete(fn) }
+      }
+    },
+    chat: {
+      submit: function (text) {
+        if (!String(text || '').trim()) throw new Error('提交内容不能为空')
+        send('submit', { text: String(text) })
+      }
+    },
+    clipboard: {
+      write: function (text) { return request('clipboard', { text: String(text ?? '') }) }
+    },
+    themes: { register: function (theme) { send('theme', { theme: theme }) } },
+    skills: { register: function (skill) { send('skill', { skill: skill }) } },
+    messages: { inject: function (text, kind) { send('message', { text: String(text), messageKind: kind || 'system' }) } },
+    knowledge: {
+      call: function (action, args) { return request('knowledge', { action: action, args: args || {} }) },
+      pickDir: function () { return request('knowledge-pick-dir', {}) }
+    },
+    ui: {
+      modal: function (options) { return openModal(options || {}) },
+      confirm: function (options) { return confirmDialog(options || {}) },
+      closeModal: function () { closeModal(false) },
+      registerDockPane: function (pane) {
+        if (!pane || !pane.id || typeof pane.render !== 'function') throw new Error('ui.registerDockPane 需要 id 与 render')
+        var id = String(pane.id)
+        if (paneHosts.has(id)) throw new Error('dock 面板 id 重复：' + id)
+        var host = document.createElement('div')
+        host.className = 'plugin-pane-root'
+        host.dataset.pane = id
+        host.hidden = activePaneId !== id
+        host.style.width = '100%'
+        host.style.height = '100%'
+        document.body.appendChild(host)
+        paneHosts.set(id, host)
+        pane.render(host, api)
+        send('pane', { pane: { id: id, label: pane.label || id, order: Number(pane.order) || 100 } })
+        return function () {
+          if (!paneHosts.has(id)) return
+          paneHosts.delete(id)
+          host.remove()
+          send('pane-remove', { id: id })
+        }
+      }
+    },
+    on: function (event, fn) {
+      if (!hooks.has(event)) {
+        hooks.set(event, [])
+        send('subscribe', { event: event })
+      }
+      hooks.get(event).push(fn)
+      return function () {
+        var list = hooks.get(event) || []
+        var index = list.indexOf(fn)
+        if (index >= 0) list.splice(index, 1)
+      }
+    }
+  }
+
+  /* ---------------------------------------------------------- styles */
+
+  function applyStyles (styles) {
+    if (!styles) return
+    var el = document.createElement('style')
+    el.id = 'astral-styles'
+    el.textContent = styles
+    document.head.appendChild(el)
+  }
+
+  function applyTheme (styleText) {
+    if (!styleText) return
+    if (!themeStyle) {
+      themeStyle = document.createElement('style')
+      themeStyle.id = 'astral-theme'
+      document.head.appendChild(themeStyle)
+    }
+    themeStyle.textContent = styleText
+  }
+
+  function applySandboxBase () {
+    var el = document.createElement('style')
+    el.textContent = [
+      'html, body { background: transparent !important; }',
+      'body { margin: 0; height: 100%; overflow: hidden; }',
+      '.plugin-pane-root { height: 100%; min-height: 0; }',
+      '.plugin-pane-root[hidden] { display: none !important; }'
+    ].join('\n')
+    document.head.appendChild(el)
+  }
+
+  /* --------------------------------------------------------- messages */
+
+  function onHostMessage (event) {
+    var data = event.data
+    if (!data) return
+    if (data.kind === 'init') {
+      if (started) return
+      started = true
+      channel = data.channel
+      manifest = data.manifest || {}
+      project = data.project || { id: '', name: '默认项目' }
+      config = data.config || {}
+      applyStyles(data.styles)
+      applyTheme(data.styleText)
+      applySandboxBase()
+      api.version = manifest.version || ''
+      api.manifest = manifest
+      start(data.source || '')
+      return
+    }
+    if (data.channel !== channel) return
+    if (data.kind === 'project') {
+      project = data.project || project
+      var snapshot = currentProject()
+      projectListeners.forEach(function (fn) {
+        try { fn(snapshot) } catch (err) { send('log', { args: ['project listener error', String(err)] }) }
+      })
+      return
+    }
+    if (data.kind === 'style') {
+      applyTheme(data.styleText)
+      return
+    }
+    if (data.kind === 'pane-active') {
+      var active = String(data.id || '')
+      activePaneId = active
+      paneHosts.forEach(function (host, id) { host.hidden = id !== active })
+      send('pane-visible', { id: active })
+      return
+    }
+    if (data.kind === 'request-result') {
+      var item = pendingRequests.get(data.id)
+      if (!item) return
+      clearTimeout(item.timer)
+      pendingRequests.delete(data.id)
+      if (data.error) item.reject(new Error(data.error))
+      else item.resolve(data.result)
+      return
+    }
+    if (data.kind === 'hook') {
+      var result
+      var chain = Promise.resolve()
+      var list = hooks.get(data.event) || []
+      list.forEach(function (fn) {
+        chain = chain.then(async function () {
+          try {
+            var out = await fn(data.payload)
+            if (out !== undefined && out !== null) result = out
+          } catch (err) {
+            send('log', { args: ['hook error', String(err)] })
+          }
+        })
+      })
+      chain.then(function () { send('hook-result', { id: data.id, result: result }) })
+    } else if (data.kind === 'settings') {
+      config = data.config || {}
+      settingsListeners.forEach(function (fn) {
+        try { fn(config) } catch (err) { send('log', { args: ['settings error', String(err)] }) }
+      })
+    }
+  }
+
+  async function start (source) {
+    try {
+      var blob = new Blob([source], { type: 'text/javascript' })
+      var url = URL.createObjectURL(blob)
+      var mod = await import(url)
+      var setup = mod.default || mod.setup
+      if (typeof setup !== 'function') throw new Error('入口没有导出 default 函数')
+      await setup(api)
+      URL.revokeObjectURL(url)
+      send('ready')
+    } catch (err) {
+      send('error', { error: String((err && err.message) || err) })
+    }
+  }
+
+  window.addEventListener('message', onHostMessage)
+})()
+</script>
+</body>
+</html>

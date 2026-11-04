@@ -1,0 +1,95 @@
+'use strict'
+
+const { contextBridge, ipcRenderer } = require('electron')
+
+contextBridge.exposeInMainWorld('astral', {
+  boot: () => ipcRenderer.invoke('astral:boot'),
+  saveConfig: (file, data) => ipcRenderer.invoke('astral:saveConfig', file, data),
+  loadSession: () => ipcRenderer.invoke('astral:session:load'),
+  saveSession: (data) => ipcRenderer.invoke('astral:session:save', data),
+  runStart: (payload) => ipcRenderer.invoke('astral:runs:start', payload),
+  runEvent: (payload) => ipcRenderer.invoke('astral:runs:event', payload),
+  runFinish: (payload) => ipcRenderer.invoke('astral:runs:finish', payload),
+  runAbandon: (payload) => ipcRenderer.invoke('astral:runs:abandon', payload),
+  runList: (payload) => ipcRenderer.invoke('astral:runs:list', payload),
+  runGet: (id) => ipcRenderer.invoke('astral:runs:get', { id }),
+  runOwners: () => ipcRenderer.invoke('astral:runOwner:list'),
+  resetRunOwners: (payload) => ipcRenderer.invoke('astral:runOwner:reset', payload || {}),
+  jobList: (payload) => ipcRenderer.invoke('astral:jobs:list', payload),
+  jobGet: (id) => ipcRenderer.invoke('astral:jobs:get', { id }),
+  jobCreate: (payload) => ipcRenderer.invoke('astral:jobs:create', payload),
+  jobUpdate: (payload) => ipcRenderer.invoke('astral:jobs:update', payload),
+  jobRemove: (id) => ipcRenderer.invoke('astral:jobs:remove', { id }),
+  auditList: (payload) => ipcRenderer.invoke('astral:audit:list', payload),
+  auditCapabilities: () => ipcRenderer.invoke('astral:audit:capabilities'),
+  buildInfo: () => ipcRenderer.invoke('astral:build:info'),
+  capabilities: () => ipcRenderer.invoke('astral:capabilities'),
+  exportDiagnostics: () => ipcRenderer.invoke('astral:diagnostics:export'),
+  loadProjectSession: (id) => ipcRenderer.invoke('astral:projectSession:load', id),
+  saveProjectSession: (id, data) => ipcRenderer.invoke('astral:projectSession:save', id, data),
+  pickFolder: () => ipcRenderer.invoke('astral:pickFolder'),
+  startLLM: (payload) => ipcRenderer.invoke('astral:llm:start', payload),
+  stopLLM: (payload) => ipcRenderer.invoke('astral:llm:stop', payload),
+  testLLM: (payload) => ipcRenderer.invoke('astral:llm:test', payload),
+  setProviderKey: (payload) => ipcRenderer.invoke('astral:providerKey:set', payload),
+  clearProviderKey: (payload) => ipcRenderer.invoke('astral:providerKey:clear', payload),
+  hasProviderKey: (payload) => ipcRenderer.invoke('astral:providerKey:has', payload),
+  onLLMEvent: (handler) => {
+    ipcRenderer.on('astral:llm:event', (_event, payload) => handler(payload))
+  },
+  bridgeStatus: () => ipcRenderer.invoke('astral:bridgeStatus'),
+  onBridgeRequest: (handler) => {
+    ipcRenderer.on('astral:bridge', (_event, payload) => handler(payload))
+  },
+  replyBridge: (id, result) => ipcRenderer.send('astral:bridge:reply', { id, result }),
+  openDir: (which) => ipcRenderer.invoke('astral:openDir', which),
+  openFile: (filePath) => ipcRenderer.invoke('astral:openFile', filePath),
+  readProjectFile: (payload) => ipcRenderer.invoke('astral:readProjectFile', payload),
+  writeProjectFile: (payload) => ipcRenderer.invoke('astral:writeProjectFile', payload),
+  pickFiles: (rootPath) => ipcRenderer.invoke('astral:pickFiles', rootPath),
+  pickImage: () => ipcRenderer.invoke('astral:pickImage'),
+  pickDataFile: () => ipcRenderer.invoke('astral:pickDataFile'),
+  saveDataFile: (payload) => ipcRenderer.invoke('astral:saveDataFile', payload),
+  uploadSkill: () => ipcRenderer.invoke('astral:skills:upload'),
+  deleteSkill: (payload) => ipcRenderer.invoke('astral:skills:delete', payload),
+  deleteDataFile: (payload) => ipcRenderer.invoke('astral:deleteDataFile', payload),
+  readDataFile: (payload) => ipcRenderer.invoke('astral:readDataFile', payload),
+  readFilePreview: (payload) => ipcRenderer.invoke('astral:readFilePreview', payload),
+  transcribe: (payload) => ipcRenderer.invoke('astral:transcribe', payload),
+  speechStart: (payload) => ipcRenderer.invoke('astral:speech:start', payload),
+  speechStop: (payload) => ipcRenderer.invoke('astral:speech:stop', payload),
+  onSpeechEvent: (handler) => {
+    const listener = (_event, payload) => handler(payload)
+    ipcRenderer.on('astral:speech:event', listener)
+    return () => ipcRenderer.removeListener('astral:speech:event', listener)
+  },
+  senseVoiceInfo: (payload) => ipcRenderer.invoke('astral:sensevoice:info', payload),
+  senseVoiceTranscribe: (payload) => ipcRenderer.invoke('astral:sensevoice:transcribe', payload),
+  pickSpeechModel: () => ipcRenderer.invoke('astral:speech-models:pick'),
+  openExternal: (url) => ipcRenderer.invoke('astral:open-external', url),
+  writeClipboard: (text) => ipcRenderer.invoke('astral:clipboard:write', text),
+  knowledgeList: (payload) => ipcRenderer.invoke('astral:knowledge:list', payload),
+  knowledgeSave: (payload) => ipcRenderer.invoke('astral:knowledge:save', payload),
+  knowledgeDelete: (payload) => ipcRenderer.invoke('astral:knowledge:delete', payload),
+  knowledgeCall: (payload) => ipcRenderer.invoke('astral:knowledge:call', payload),
+  pickKnowledgeDir: () => ipcRenderer.invoke('astral:knowledge:pick-dir'),
+  mcpList: () => ipcRenderer.invoke('astral:mcp:list'),
+  mcpReload: () => ipcRenderer.invoke('astral:mcp:reload'),
+  mcpCall: (payload) => ipcRenderer.invoke('astral:mcp:call', payload),
+  mcpSetEnabled: (payload) => ipcRenderer.invoke('astral:mcp:setEnabled', payload),
+  mcpOpenConfig: () => ipcRenderer.invoke('astral:mcp:openConfig'),
+  reload: () => ipcRenderer.invoke('astral:reload'),
+  listModels: (payload) => ipcRenderer.invoke('astral:listModels', payload),
+  winMinimize: () => ipcRenderer.invoke('win:minimize'),
+  winToggleMaximize: () => ipcRenderer.invoke('win:toggleMaximize'),
+  winClose: () => ipcRenderer.invoke('win:close'),
+  setBackgroundPref: (closeToTray) => ipcRenderer.invoke('app:background', { closeToTray }),
+  hideToTray: () => ipcRenderer.invoke('app:hideToTray'),
+  quitApp: () => ipcRenderer.invoke('app:quit'),
+  onWindowActivity: (handler) => {
+    ipcRenderer.on('app:activity', (_event, value) => handler(Boolean(value)))
+  },
+  onMaximizeChange: (handler) => {
+    ipcRenderer.on('win:maximized', (_event, value) => handler(Boolean(value)))
+  }
+})

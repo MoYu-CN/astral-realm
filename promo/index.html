@@ -1,0 +1,912 @@
+<!doctype html>
+<meta charset="utf-8">
+<title>星界 Astral Realm · 宣传片</title>
+<style>
+  html,body{margin:0;height:100%;background:#07060e;overflow:hidden;font-family:system-ui,"Microsoft YaHei","PingFang SC",sans-serif}
+  #c{display:block;width:1280px;height:720px}
+  #ui{position:absolute;left:24px;bottom:18px;display:flex;gap:10px;align-items:center;color:#a7abd0;font-size:12px}
+  #ui button{background:rgba(155,140,255,.14);color:#dcd8ff;border:1px solid rgba(155,140,255,.32);border-radius:8px;padding:6px 14px;font-size:12px;cursor:pointer}
+  #ui button:hover{background:rgba(155,140,255,.26)}
+  #bar{width:240px;height:4px;background:rgba(255,255,255,.12);border-radius:4px;overflow:hidden}
+  #fill{height:100%;width:0;background:linear-gradient(90deg,#9b8cff,#5eead4)}
+</style>
+<canvas id="c" width="1280" height="720"></canvas>
+<div id="ui" hidden>
+  <button id="toggle">暂停</button>
+  <button id="replay">重播（含声音）</button>
+  <div id="bar"><div id="fill"></div></div>
+  <span id="clock">0.0s</span>
+</div>
+<script>
+/* ============================================================
+   星界宣传片 · 16 秒 · 画面与音效共用同一条时间轴
+   画面：Canvas 2D 逐帧确定性绘制（只依赖 t）
+   声音：Web Audio 程序化合成，全部由 scheduleScore 一次排程
+   ============================================================ */
+
+const c = document.getElementById('c')
+const ctx = c.getContext('2d')
+const W = 1280, H = 720
+const AUTO = Boolean(window.promo)
+const QS = new URLSearchParams(location.search)
+const DUR = Number(QS.get('dur')) || 16.4
+const MODE = QS.get('mode') || (AUTO ? 'video' : 'preview')
+
+const C = {
+  bg: '#07060e',
+  glowA: 'rgba(104,82,214,0.20)', glowB: 'rgba(30,136,166,0.13)',
+  line: 'rgba(168,158,255,0.15)', line2: 'rgba(168,158,255,0.30)',
+  card: 'rgba(19,17,34,0.90)', card2: 'rgba(25,22,46,0.82)',
+  fg: '#eef0ff', fg2: '#a5abce', fg3: '#6f7599',
+  accent: '#9b8cff', violet: '#b98bff', cyan: '#5eead4', blue: '#38bdf8', amber: '#f0b26b'
+}
+const clamp = (v, a = 0, b = 1) => Math.max(a, Math.min(b, v))
+const ease = (t) => 1 - Math.pow(1 - clamp(t), 3)
+const easeIO = (t) => { t = clamp(t); return t < .5 ? 4 * t * t * t : 1 - Math.pow(-2 * t + 2, 3) / 2 }
+const lerp = (a, b, t) => a + (b - a) * t
+const alphaAt = (t, len, fade = .16) => Math.min(clamp(t / fade), clamp((len - t) / fade))
+const step = (t, at, dur = .45) => ease(clamp((t - at) / dur))
+
+/* ------------------------------------------------------------ 绘图基元 */
+function rr (x, y, w, h, r) {
+  r = Math.min(r, w / 2, h / 2)
+  ctx.beginPath(); ctx.moveTo(x + r, y)
+  ctx.arcTo(x + w, y, x + w, y + h, r); ctx.arcTo(x + w, y + h, x, y + h, r)
+  ctx.arcTo(x, y + h, x, y, r); ctx.arcTo(x, y, x + w, y, r); ctx.closePath()
+}
+function panel (x, y, w, h, opt = {}) {
+  ctx.save()
+  rr(x, y, w, h, opt.r ?? 12)
+  if (opt.shadow !== false) { ctx.shadowColor = 'rgba(0,0,0,.45)'; ctx.shadowBlur = 22; ctx.shadowOffsetY = 8 }
+  ctx.fillStyle = opt.fill || C.card; ctx.fill()
+  ctx.shadowColor = 'transparent'
+  ctx.lineWidth = 1; ctx.strokeStyle = opt.stroke || C.line; ctx.stroke()
+  ctx.restore()
+}
+function txt (s, x, y, size, color, weight = 400, align = 'left', mono = false) {
+  ctx.save()
+  ctx.font = `${weight} ${size}px ${mono ? 'ui-monospace,Consolas,monospace' : 'system-ui,"Microsoft YaHei","PingFang SC",sans-serif'}`
+  ctx.fillStyle = color; ctx.textAlign = align; ctx.textBaseline = 'alphabetic'
+  ctx.fillText(s, x, y); ctx.restore()
+}
+function spaced (s, x, y, size, gap, color, align = 'center') {
+  const chars = [...s]
+  ctx.save(); ctx.font = `500 ${size}px system-ui,sans-serif`; ctx.fillStyle = color; ctx.textAlign = 'left'
+  let total = 0
+  for (const ch of chars) total += ctx.measureText(ch).width + gap
+  let px = align === 'center' ? x - total / 2 : x
+  for (const ch of chars) { ctx.fillText(ch, px, y); px += ctx.measureText(ch).width + gap }
+  ctx.restore()
+}
+function gradientText (s, x, y, size, colors, weight = 500) {
+  ctx.save(); ctx.font = `${weight} ${size}px system-ui,"Microsoft YaHei",sans-serif`; ctx.textAlign = 'center'
+  const w = ctx.measureText(s).width
+  const g = ctx.createLinearGradient(x - w / 2, 0, x + w / 2, 0)
+  colors.forEach((col, i) => g.addColorStop(i / (colors.length - 1), col))
+  ctx.fillStyle = g; ctx.fillText(s, x, y); ctx.restore()
+}
+function starPath (cx, cy, ro, ri, rot = 0) {
+  ctx.beginPath()
+  for (let i = 0; i < 16; i++) {
+    const a = rot + i * Math.PI / 8 - Math.PI / 2
+    const r = i % 4 === 0 ? ro : (i % 2 === 0 ? ro * 0.52 : ri)
+    const px = cx + Math.cos(a) * r, py = cy + Math.sin(a) * r
+    i ? ctx.lineTo(px, py) : ctx.moveTo(px, py)
+  }
+  ctx.closePath()
+}
+function logo (cx, cy, size, alpha, rot = 0, glow = 1) {
+  if (size <= 0) return
+  ctx.save(); ctx.globalAlpha = alpha
+  if (glow > 0) {
+    const g = ctx.createRadialGradient(cx, cy, 0, cx, cy, size * 2.2)
+    g.addColorStop(0, `rgba(155,140,255,${.30 * glow})`); g.addColorStop(1, 'rgba(155,140,255,0)')
+    ctx.fillStyle = g; ctx.beginPath(); ctx.arc(cx, cy, size * 2.2, 0, Math.PI * 2); ctx.fill()
+  }
+  const lg = ctx.createLinearGradient(cx - size, cy - size, cx + size, cy + size)
+  lg.addColorStop(0, '#c4b5ff'); lg.addColorStop(.5, '#9b8cff'); lg.addColorStop(1, '#5eead4')
+  starPath(cx, cy, size, size * .34, rot)
+  ctx.fillStyle = lg; ctx.fill()
+  ctx.restore()
+}
+function line (x1, y1, x2, y2, color, width = 1, dash) {
+  ctx.save(); ctx.strokeStyle = color; ctx.lineWidth = width
+  if (dash) ctx.setLineDash(dash)
+  ctx.beginPath(); ctx.moveTo(x1, y1); ctx.lineTo(x2, y2); ctx.stroke(); ctx.restore()
+}
+function curve (x1, y1, x2, y2, color, width = 1.5) {
+  ctx.save(); ctx.strokeStyle = color; ctx.lineWidth = width
+  ctx.beginPath(); ctx.moveTo(x1, y1); ctx.bezierCurveTo(x1, (y1 + y2) / 2, x2, (y1 + y2) / 2, x2, y2); ctx.stroke()
+  ctx.restore()
+}
+function bezierPoint (x1, y1, x2, y2, t) {
+  const cy1 = (y1 + y2) / 2, cy2 = (y1 + y2) / 2, mt = 1 - t
+  return {
+    x: mt ** 3 * x1 + 3 * mt ** 2 * t * x1 + 3 * mt * t ** 2 * x2 + t ** 3 * x2,
+    y: mt ** 3 * y1 + 3 * mt ** 2 * t * cy1 + 3 * mt * t ** 2 * cy2 + t ** 3 * y2
+  }
+}
+function dot (x, y, r, color, alpha = 1) {
+  ctx.save(); ctx.globalAlpha = alpha; ctx.fillStyle = color
+  ctx.beginPath(); ctx.arc(x, y, r, 0, Math.PI * 2); ctx.fill(); ctx.restore()
+}
+function chip (s, x, y, color, active = true, size = 12) {
+  ctx.save(); ctx.font = `400 ${size}px system-ui,"Microsoft YaHei",sans-serif`
+  const w = ctx.measureText(s).width + 26
+  rr(x, y, w, 26, 13)
+  ctx.fillStyle = active ? 'rgba(94,234,212,0.10)' : 'rgba(255,255,255,0.04)'; ctx.fill()
+  ctx.strokeStyle = active ? 'rgba(94,234,212,0.38)' : C.line; ctx.lineWidth = 1; ctx.stroke()
+  txt(s, x + w / 2, y + 17, size, active ? C.cyan : C.fg3, 400, 'center')
+  ctx.restore(); return w
+}
+
+/* ------------------------------------------------------------ 星野背景 */
+const stars = Array.from({ length: 130 }, () => ({
+  x: Math.random() * W, y: Math.random() * H,
+  r: Math.random() * 1.25 + .25, p: Math.random() * Math.PI * 2,
+  s: Math.random() * .7 + .25,
+  c: ['#9b8cff', '#5eead4', '#38bdf8', '#f0b26b', '#ffffff'][Math.floor(Math.random() * 5)]
+}))
+function background (t) {
+  const g = ctx.createLinearGradient(0, 0, W, H)
+  g.addColorStop(0, '#0a0816'); g.addColorStop(.55, C.bg); g.addColorStop(1, '#0b0a18')
+  ctx.fillStyle = g; ctx.fillRect(0, 0, W, H)
+  const gx = W * (.3 + .12 * Math.sin(t * .2)), gy = H * (.3 + .1 * Math.cos(t * .15))
+  const a = ctx.createRadialGradient(gx, gy, 0, gx, gy, 640)
+  a.addColorStop(0, C.glowA); a.addColorStop(1, 'rgba(0,0,0,0)')
+  ctx.fillStyle = a; ctx.fillRect(0, 0, W, H)
+  const bx = W * (.8 + .08 * Math.cos(t * .18)), by = H * (.76 + .1 * Math.sin(t * .21))
+  const b = ctx.createRadialGradient(bx, by, 0, bx, by, 560)
+  b.addColorStop(0, C.glowB); b.addColorStop(1, 'rgba(0,0,0,0)')
+  ctx.fillStyle = b; ctx.fillRect(0, 0, W, H)
+  for (const s of stars) {
+    const y = (s.y + t * s.s * 2.4) % H
+    dot(s.x, y, s.r, s.c, .16 + .5 * (.5 + .5 * Math.sin(t * 1.3 + s.p)))
+  }
+  const v = ctx.createRadialGradient(W / 2, H / 2, H * .3, W / 2, H / 2, H * .95)
+  v.addColorStop(0, 'rgba(0,0,0,0)'); v.addColorStop(1, 'rgba(0,0,0,0.55)')
+  ctx.fillStyle = v; ctx.fillRect(0, 0, W, H)
+}
+function heading (main, sub, alpha) {
+  ctx.save(); ctx.globalAlpha = alpha
+  gradientText(main, W / 2, 72, 33, ['#e9e4ff', '#b9a8ff', '#7ee5d0'])
+  txt(sub, W / 2, 104, 14, C.fg2, 400, 'center')
+  ctx.restore()
+}
+/* ------------------------------------------------------------ 幕 1 开场 0.00 */
+function scene1 (t) {
+  const a = clamp(t / .55)
+  const pop = ease(clamp(t / .8))
+  const sc = lerp(.55, 1, pop)
+  ctx.save(); ctx.globalAlpha = a
+  const cx = W / 2, cy = 244
+  for (let i = 0; i < 2; i++) {
+    const rp = clamp((t - .18 - i * .22) / 1.1)
+    if (rp <= 0) continue
+    ctx.save(); ctx.globalAlpha = a * (1 - rp) * .5
+    ctx.strokeStyle = i ? C.cyan : C.accent; ctx.lineWidth = 1.4
+    ctx.beginPath(); ctx.arc(cx, cy, 44 + rp * 148, 0, Math.PI * 2); ctx.stroke(); ctx.restore()
+  }
+  logo(cx, cy, 54 * sc, 1, (1 - pop) * -.6)
+  ctx.restore()
+
+  ctx.save(); ctx.globalAlpha = step(t, .38, .5)
+  gradientText('星界', W / 2, 424, 70, ['#f3efff', '#b9a8ff', '#6fe3d0', '#8ecbff'])
+  spaced('ASTRAL REALM', W / 2, 462, 13, 8, C.fg2)
+  ctx.restore()
+
+  ctx.save(); ctx.globalAlpha = step(t, .72, .5)
+  txt('多 Agent · 多模型协作工作台', W / 2, 512, 17, C.fg2, 400, 'center')
+  ctx.restore()
+
+  ctx.save(); ctx.globalAlpha = step(t, 1.1, .6)
+  line(W / 2 - 70, 548, W / 2 + 70, 548, C.line, 1)
+  ctx.restore()
+}
+
+/* ------------------------------------------------------------ 幕 2 编制 2.30 */
+const MEMBERS = [
+  ['星枢', '总指挥', '统筹 · 决策', 'deepseek-chat'],
+  ['爻', '副指挥 · 策划', '需求拆解', 'claude-sonnet'],
+  ['熵', '副指挥 · 工程', '工程把控', 'gpt-5'],
+  ['砾', '执行者 · 检索', '资料查证', 'qwen3-max'],
+  ['织', '执行者 · 撰写', '内容产出', 'glm-4.6'],
+  ['砭', '执行者 · 校验', '结果复核', 'local-qwen']
+]
+function memberCard (m, x, y, w, h, alpha) {
+  ctx.save(); ctx.globalAlpha = alpha
+  panel(x, y, w, h, { fill: C.card })
+  const g = ctx.createLinearGradient(x, y, x + 40, y + 40)
+  g.addColorStop(0, 'rgba(155,140,255,.55)'); g.addColorStop(1, 'rgba(94,234,212,.28)')
+  rr(x + 14, y + h / 2 - 16, 32, 32, 10); ctx.fillStyle = g; ctx.fill()
+  txt([...m[0]][0], x + 30, y + h / 2 + 6, 16, '#100d20', 500, 'center')
+  txt(m[1], x + 58, y + 30, 14, C.fg, 500)
+  txt(m[2], x + 58, y + 51, 11.5, C.fg2)
+  txt(m[3], x + 58, y + h - 12, 10.5, '#8f95bb', 400, 'left', true)
+  dot(x + w - 16, y + 16, 2.6, C.cyan, .8)
+  ctx.restore()
+}
+function scene2 (t, p, len) {
+  const a = alphaAt(t, len)
+  heading('你定编制，它们各司其职', '每个成员独立绑定模型、提示词、技能与上下文', a)
+  MEMBERS.forEach((m, i) => {
+    const st = step(t, .22 + i * .1, .42)
+    if (st <= 0) return
+    const col = i % 2, row = Math.floor(i / 2)
+    const x = 96 + col * 264, y = 164 + row * 112 + (1 - st) * 20
+    memberCard(m, x, y, 246, 94, a * st)
+  })
+  /* 右侧：一套独立配置 */
+  const st = step(t, .4, .5)
+  if (st > 0) {
+    ctx.save(); ctx.globalAlpha = a * st
+    panel(640, 164, 544, 310, { fill: C.card2 })
+    txt('一个成员 = 一套独立配置', 668, 200, 16, C.fg, 500)
+    line(668, 216, 1156, 216, C.line, 1)
+    const rows = [
+      ['模型', '各自指定供应商与型号'],
+      ['提示词', '角色、边界、输出格式分开写'],
+      ['技能 · MCP', '按成员挂载，互不干扰'],
+      ['上下文', '单独对话线，互不串味']
+    ]
+    rows.forEach((r, i) => {
+      const rp = step(t, .55 + i * .12, .35)
+      if (rp <= 0) return
+      const y = 250 + i * 62
+      dot(682, y - 4, 3.2, [C.accent, C.violet, C.blue, C.cyan][i], .9 * rp)
+      txt(r[0], 700, y, 14, C.fg, 500)
+      txt(r[1], 700, y + 20, 12, C.fg2)
+    })
+    ctx.restore()
+  }
+  const tags = ['可任免', '可改组', '配置全明文']
+  ctx.save(); ctx.globalAlpha = a
+  const widths = []
+  ctx.font = '400 12px system-ui,"Microsoft YaHei",sans-serif'
+  for (const s of tags) widths.push(ctx.measureText(s).width + 26)
+  ctx.restore()
+  const totalW = widths.reduce((x, y) => x + y, 0) + 28
+  let px = (W - totalW) / 2
+  tags.forEach((s, i) => {
+    const tp = step(t, .95 + i * .12, .35)
+    if (tp <= 0) return
+    ctx.save(); ctx.globalAlpha = a * tp
+    chip(s, px, 552, C.accent, true)
+    ctx.restore()
+    px += widths[i] + 14
+  })
+}
+
+/* ------------------------------------------------------------ 幕 3 派单 5.50 */
+const PLAN_TASK = '把登录模块重构拆成三段，各附风险点'
+const PLAN_ROWS = [
+  '{"to":"爻","task":"拆成三段方案"}',
+  '{"to":"熵","task":"列出工程风险"}',
+  '{"to":"砾","task":"核实事实与出处"}'
+]
+const NODES = [['爻', '方案拆解'], ['熵', '工程风险'], ['砾', '事实核查']]
+function scene3 (t, p, len) {
+  const a = alphaAt(t, len)
+  heading('一句话，自动拆解与派单', '并行推进，最后收束成一条结论', a)
+  ctx.save(); ctx.globalAlpha = a
+  panel(96, 146, 1088, 468, { fill: 'rgba(13,11,26,.82)', r: 16 })
+  line(96, 186, 1184, 186, C.line, 1)
+  ;['#ff7a7a', '#f0b26b', '#5eead4'].forEach((col, i) => dot(122 + i * 18, 166, 4, col, .6))
+  txt('协作频道', 640, 171, 12, C.fg2, 400, 'center')
+  txt('编制 6 人', 1156, 171, 11, C.fg3, 400, 'right')
+
+  const typeP = clamp((t - .32) / .72)
+  const typed = PLAN_TASK.slice(0, Math.floor(typeP * PLAN_TASK.length))
+  panel(128, 204, 1024, 56, { fill: 'rgba(155,140,255,.07)', stroke: C.line2, r: 10, shadow: false })
+  txt('下达指令', 148, 224, 10, C.accent, 500)
+  txt(typed + (typeP < 1 && Math.floor(t * 12) % 2 ? '│' : ''), 148, 248, 16, C.fg)
+
+  const planP = step(t, 1.06, .45)
+  if (planP > 0) {
+    ctx.save(); ctx.globalAlpha = a * planP
+    panel(128, 280, 470, 186, { fill: 'rgba(9,8,20,.92)', r: 10, shadow: false })
+    txt('<astral:plan>', 148, 306, 12, C.cyan, 400, 'left', true)
+    PLAN_ROWS.forEach((r, i) => {
+      const rp = clamp((t - 1.18 - i * .18) / .3)
+      if (rp > 0) txt(r.slice(0, Math.floor(r.length * rp)), 148, 336 + i * 30, 11.5, C.fg2, 400, 'left', true)
+    })
+    ctx.save(); ctx.globalAlpha = a * planP * step(t, 1.9, .25)
+    txt('</astral:plan>', 148, 426, 12, C.cyan, 400, 'left', true)
+    ctx.restore()
+    ctx.restore()
+  }
+
+  const wireP = clamp((t - 1.6) / .7)
+  NODES.forEach((n, i) => {
+    const nx = 892, ny = 288 + i * 66
+    const alpha = a * step(t, 1.72 + i * .18, .35)
+    if (alpha <= 0) return
+    curve(600, 372, nx - 24, ny + 21, `rgba(155,140,255,${.12 + .28 * wireP})`, 1.4)
+    if (wireP > .2) {
+      const q = clamp((wireP - .2) / .8)
+      const pt = bezierPoint(600, 372, nx - 24, ny + 21, clamp(q * 1.5 - i * .18))
+      dot(pt.x, pt.y, 3.2, C.cyan, .85)
+    }
+    ctx.save(); ctx.globalAlpha = alpha
+    panel(nx - 24, ny, 236, 46, { fill: C.card2, r: 9, shadow: false })
+    dot(nx - 4, ny + 23, 5.5, [C.accent, C.blue, C.cyan][i], .9)
+    txt(n[0], nx + 12, ny + 21, 13, C.fg, 500)
+    txt(n[1], nx + 12, ny + 37, 11, C.fg2)
+    txt(i === 0 ? '已交付' : '进行中', nx + 196, ny + 28, 11, i === 0 ? C.cyan : C.fg3, 400, 'right')
+    ctx.restore()
+  })
+
+  const sumP = step(t, 2.86, .5)
+  if (sumP > 0) {
+    ctx.save(); ctx.globalAlpha = a * sumP
+    panel(128, 500, 1024, 92, { fill: 'rgba(94,234,212,.06)', stroke: 'rgba(94,234,212,.28)', r: 10, shadow: false })
+    dot(158, 534, 6.5, C.cyan, .9)
+    txt('收束成一条答复', 178, 539, 15, C.fg, 500)
+    txt('三段方案 · 三条风险 · 三条出处', 648, 539, 13, C.fg2)
+    txt('可直接采用', 1132, 539, 12, C.cyan, 400, 'right')
+    line(148, 556, 1132, 556, 'rgba(94,234,212,.14)', 1)
+    txt('6 个成员并行，只有 1 条对话线需要你读', 148, 578, 12, C.fg3)
+    ctx.restore()
+  }
+  ctx.restore()
+}
+
+/* ------------------------------------------------------------ 幕 4 事件 9.40 */
+function scene4 (t, p, len) {
+  const a = alphaAt(t, len)
+  heading('外部事件来了，先问你', '观察模式：不批准，什么都不会发生', a)
+  ctx.save(); ctx.globalAlpha = a
+
+  const fly = ease(clamp((t - .1) / .65))
+  const ex = lerp(-300, 96, fly)
+  panel(ex, 186, 300, 126, { fill: C.card })
+  dot(ex + 26, 216, 6.5, C.amber, .95)
+  txt('CI · build-001', ex + 44, 220, 11, C.amber, 500)
+  txt('CI 构建失败', ex + 20, 253, 17, C.fg, 500)
+  txt('test/foo.js 断言不通过', ex + 20, 279, 11.5, C.fg2)
+  txt('127.0.0.1:45871 /rpc', ex + 20, 300, 10, C.fg3, 400, 'left', true)
+
+  txt('规则闸门', 452, 196, 11, C.fg3, 500)
+  ;['来源白名单 ✓', '重复去重 ✓', '静默时段 —'].forEach((s, i) => {
+    const st = step(t, .82 + i * .17, .3)
+    if (st <= 0) return
+    ctx.save(); ctx.globalAlpha = a * st
+    chip(s, 452, 214 + i * 40, C.cyan, i < 2)
+    ctx.restore()
+  })
+
+  const cardP = step(t, 1.36, .5)
+  if (cardP > 0) {
+    ctx.save(); ctx.globalAlpha = a * cardP
+    panel(700, 176, 484, 216, { fill: C.card, r: 14 })
+    txt('事件记录', 724, 206, 12, C.fg2, 500)
+    txt('待批准 · 观察中', 1158, 206, 11, C.amber, 500, 'right')
+    line(700, 220, 1184, 220, C.line, 1)
+    txt('CI 构建失败：test/foo.js', 724, 254, 16, C.fg, 500)
+    txt('来源 ci · 17:42 · build-001', 724, 278, 11, C.fg3)
+    txt('本来会做什么：启动一轮诊断', 724, 308, 12, C.fg2)
+    const pressed = t > 2.5
+    panel(724, 328, 112, 34, { fill: pressed ? 'rgba(155,140,255,.34)' : 'rgba(155,140,255,.14)', stroke: pressed ? C.accent : C.line2, r: 8, shadow: false })
+    txt('批准执行', 780, 350, 13, C.fg, 500, 'center')
+    panel(846, 328, 80, 34, { fill: 'rgba(255,255,255,.04)', stroke: C.line, r: 8, shadow: false })
+    txt('忽略', 886, 350, 13, C.fg2, 400, 'center')
+    ctx.restore()
+  }
+
+  const badge = step(t, 1.92, .45)
+  if (badge > 0) {
+    ctx.save(); ctx.globalAlpha = a * badge
+    panel(96, 356, 560, 96, { fill: 'rgba(94,234,212,.06)', stroke: 'rgba(94,234,212,.28)', r: 12 })
+    txt('观察模式', 122, 388, 14, C.cyan, 500)
+    gradientText('0 次模型调用 · 0 条对话消息', 372, 422, 22, ['#b9ffe9', '#5eead4', '#8ecbff'])
+    ctx.restore()
+  }
+
+  const after = step(t, 2.56, .5)
+  if (after > 0) {
+    ctx.save(); ctx.globalAlpha = a * after
+    panel(700, 410, 484, 92, { fill: 'rgba(155,140,255,.10)', stroke: C.line2, r: 12 })
+    dot(726, 438, 5.5, C.cyan, .9)
+    txt(t > 3.0 ? '已执行 · 1 次调用' : '正在执行…', 744, 443, 14, C.fg, 500)
+    txt('事件单进入对话流，工具仍走原有审批', 744, 471, 11.5, C.fg2)
+    ctx.restore()
+  }
+
+  ctx.save(); ctx.globalAlpha = step(t, 3.0, .4)
+  txt('外部事件 ≠ 工具结果 · 批准事件 ≠ 授权工具', W / 2, 612, 12.5, C.fg3, 400, 'center')
+  ctx.restore()
+  ctx.restore()
+}
+
+/* ------------------------------------------------------------ 幕 5 收尾 13.00 */
+function scene5 (t, p, len) {
+  const a = alphaAt(t, len, .18)
+  const rise = ease(clamp(t / .8))
+  logo(W / 2, 186 + (1 - rise) * 20, 36 * rise, a, (1 - rise) * .5, .75)
+
+  ctx.save(); ctx.globalAlpha = step(t, .32, .55) * a
+  gradientText('不是万能助手，', W / 2, 312, 42, ['#f3efff', '#c3b4ff'])
+  ctx.restore()
+  ctx.save(); ctx.globalAlpha = step(t, .55, .55) * a
+  gradientText('而是一支你可以任免的队伍', W / 2, 368, 42, ['#c3b4ff', '#7ee5d0', '#8ecbff'])
+  ctx.restore()
+
+  const tags = ['零前端依赖', '配置全明文', '本地优先', 'MIT']
+  ctx.save(); ctx.font = '400 12px system-ui,"Microsoft YaHei",sans-serif'
+  const widths = tags.map((s) => ctx.measureText(s).width + 26)
+  ctx.restore()
+  const totalW = widths.reduce((x, y) => x + y, 0) + (tags.length - 1) * 14
+  let px = (W - totalW) / 2
+  tags.forEach((s, i) => {
+    const st = step(t, 1.0 + i * .11, .35)
+    if (st <= 0) return
+    ctx.save(); ctx.globalAlpha = a * st
+    chip(s, px, 424, C.accent, true)
+    ctx.restore()
+    px += widths[i] + 14
+  })
+
+  ctx.save(); ctx.globalAlpha = step(t, 1.62, .5) * a
+  line(W / 2 - 130, 512, W / 2 + 130, 512, C.line2, 1)
+  spaced('ASTRAL REALM', W / 2, 552, 13, 8, C.fg2)
+  txt('Electron · 源码即产物 · 开箱即用', W / 2, 584, 12, C.fg3, 400, 'center')
+  ctx.restore()
+
+  /* 收场压暗 */
+  const dark = clamp((t - 2.95) / .45)
+  if (dark > 0) {
+    ctx.save(); ctx.globalAlpha = dark * .92; ctx.fillStyle = '#050409'
+    ctx.fillRect(0, 0, W, H); ctx.restore()
+  }
+}
+
+const SCENES = [
+  { t0: 0.0, t1: 2.30, draw: scene1 },
+  { t0: 2.30, t1: 5.50, draw: scene2 },
+  { t0: 5.50, t1: 9.40, draw: scene3 },
+  { t0: 9.40, t1: 13.00, draw: scene4 },
+  { t0: 13.00, t1: DUR, draw: scene5 }
+]
+
+/* ============================================================
+   音效：与画面同一条时间轴的程序化音色
+   ============================================================ */
+const CUE = {
+  s2: 2.30, s3: 5.50, s4: 9.40, s5: 13.00
+}
+const noiseCache = new WeakMap()
+function noiseBuffer (c, seconds = 2) {
+  let buf = noiseCache.get(c)
+  if (buf) return buf
+  buf = c.createBuffer(1, Math.ceil(c.sampleRate * seconds), c.sampleRate)
+  const d = buf.getChannelData(0)
+  for (let i = 0; i < d.length; i++) d[i] = Math.random() * 2 - 1
+  noiseCache.set(c, buf)
+  return buf
+}
+function makeChain (c, dest) {
+  const input = c.createGain(); input.gain.value = 2.6
+  const comp = c.createDynamicsCompressor()
+  comp.threshold.value = -12; comp.knee.value = 8; comp.ratio.value = 4
+  comp.attack.value = 0.003; comp.release.value = 0.2
+  const verb = c.createConvolver()
+  const len = Math.floor(c.sampleRate * 1.3)
+  const ir = c.createBuffer(2, len, c.sampleRate)
+  for (let ch = 0; ch < 2; ch++) {
+    const d = ir.getChannelData(ch)
+    for (let i = 0; i < len; i++) d[i] = (Math.random() * 2 - 1) * Math.pow(1 - i / len, 2.8)
+  }
+  verb.buffer = ir
+  const send = c.createGain(); send.gain.value = 0.16
+  input.connect(comp); comp.connect(dest)
+  input.connect(send); send.connect(verb); verb.connect(comp)
+  return { input, comp }
+}
+const MODES = [
+  { r: 1.00, a: 1.00, d: 1.00 },
+  { r: 2.00, a: 0.52, d: 0.68 },
+  { r: 2.76, a: 0.38, d: 0.55 },
+  { r: 4.16, a: 0.24, d: 0.40 },
+  { r: 5.43, a: 0.14, d: 0.30 },
+  { r: 8.21, a: 0.08, d: 0.22 }
+]
+function bell (c, t, f, gain, dur, pan = 0) {
+  const nyq = c.sampleRate * 0.45
+  for (const m of MODES) {
+    const d = Math.max(0.12, dur * m.d)
+    for (const de of (m.r <= 2.76 ? [1, 1.0034] : [1])) {
+      const osc = c.createOscillator(); osc.type = 'sine'
+      osc.frequency.setValueAtTime(Math.min(nyq, f * m.r * de), t)
+      const g = c.createGain()
+      const share = m.r <= 2.76 && de !== 1 ? 0.38 : (m.r <= 2.76 ? 0.62 : 1)
+      g.gain.setValueAtTime(0.0001, t)
+      g.gain.linearRampToValueAtTime(Math.max(0.0002, gain * m.a * share), t + 0.0015)
+      g.gain.exponentialRampToValueAtTime(0.0001, t + d)
+      const p = c.createStereoPanner(); p.pan.value = pan
+      g.connect(p); p.connect(c.__bus); osc.connect(g)
+      osc.start(t); osc.stop(t + d + 0.02)
+    }
+  }
+  const src = c.createBufferSource(); src.buffer = noiseBuffer(c); src.loop = true
+  const hp = c.createBiquadFilter(); hp.type = 'highpass'; hp.frequency.value = 5200
+  const g = c.createGain()
+  g.gain.setValueAtTime(0.0001, t)
+  g.gain.linearRampToValueAtTime(gain * 0.26, t + 0.001)
+  g.gain.exponentialRampToValueAtTime(0.0001, t + 0.006)
+  src.connect(hp); hp.connect(g); g.connect(c.__bus)
+  src.start(t); src.stop(t + 0.01)
+}
+/* 短促木质/数码点：卡片落地、行出现 */
+function pluck (c, t, f, gain = 0.06, dur = 0.22, pan = 0) {
+  for (const [r, a] of [[1, 1], [2.76, 0.45], [5.43, 0.16]]) {
+    const osc = c.createOscillator(); osc.type = 'sine'
+    osc.frequency.setValueAtTime(f * r, t)
+    const g = c.createGain()
+    g.gain.setValueAtTime(0.0001, t)
+    g.gain.linearRampToValueAtTime(gain * a, t + 0.002)
+    g.gain.exponentialRampToValueAtTime(0.0001, t + dur * (r === 1 ? 1 : .55))
+    const p = c.createStereoPanner(); p.pan.value = pan
+    g.connect(p); p.connect(c.__bus); osc.connect(g)
+    osc.start(t); osc.stop(t + dur + 0.02)
+  }
+}
+/* 极短点击：勾选、按钮、标签 */
+function tick (c, t, f = 2200, gain = 0.045, pan = 0) {
+  const osc = c.createOscillator(); osc.type = 'triangle'
+  osc.frequency.setValueAtTime(f, t)
+  const g = c.createGain()
+  g.gain.setValueAtTime(0.0001, t)
+  g.gain.linearRampToValueAtTime(gain, t + 0.0015)
+  g.gain.exponentialRampToValueAtTime(0.0001, t + 0.055)
+  const p = c.createStereoPanner(); p.pan.value = pan
+  g.connect(p); p.connect(c.__bus); osc.connect(g)
+  osc.start(t); osc.stop(t + 0.07)
+}
+/* 按键声：带通噪声，短、轻、略有随机 */
+function key (c, t, gain = 0.05, pan = 0) {
+  const src = c.createBufferSource(); src.buffer = noiseBuffer(c)
+  src.playbackRate.value = 0.9 + Math.random() * 0.4
+  const bp = c.createBiquadFilter(); bp.type = 'bandpass'
+  bp.frequency.value = 1500 + Math.random() * 1600; bp.Q.value = 1.6
+  const g = c.createGain()
+  g.gain.setValueAtTime(0.0001, t)
+  g.gain.linearRampToValueAtTime(gain, t + 0.002)
+  g.gain.exponentialRampToValueAtTime(0.0001, t + 0.022)
+  const p = c.createStereoPanner(); p.pan.value = pan
+  src.connect(bp); bp.connect(g); g.connect(p); p.connect(c.__bus)
+  src.start(t); src.stop(t + 0.03)
+}
+/* 空气感扫频：卡片飞入、切幕 */
+function whoosh (c, t, dur = 0.45, gain = 0.07, from = 320, to = 2800, pan = 0) {
+  const src = c.createBufferSource(); src.buffer = noiseBuffer(c); src.loop = true
+  const bp = c.createBiquadFilter(); bp.type = 'bandpass'; bp.Q.value = 1.1
+  bp.frequency.setValueAtTime(from, t)
+  bp.frequency.exponentialRampToValueAtTime(to, t + dur)
+  const g = c.createGain()
+  g.gain.setValueAtTime(0.0001, t)
+  g.gain.linearRampToValueAtTime(gain, t + dur * 0.52)
+  g.gain.exponentialRampToValueAtTime(0.0001, t + dur)
+  const p = c.createStereoPanner(); p.pan.value = pan
+  src.connect(bp); bp.connect(g); g.connect(p); p.connect(c.__bus)
+  src.start(t); src.stop(t + dur + 0.02)
+}
+/* 低频落地：开场、汇总、收尾 */
+function thump (c, t, gain = 0.18, from = 96, to = 46, dur = 0.38) {
+  const osc = c.createOscillator(); osc.type = 'sine'
+  osc.frequency.setValueAtTime(from, t)
+  osc.frequency.exponentialRampToValueAtTime(to, t + dur * 0.7)
+  const g = c.createGain()
+  g.gain.setValueAtTime(0.0001, t)
+  g.gain.linearRampToValueAtTime(gain, t + 0.006)
+  g.gain.exponentialRampToValueAtTime(0.0001, t + dur)
+  g.connect(c.__bus); osc.connect(g)
+  osc.start(t); osc.stop(t + dur + 0.02)
+  const src = c.createBufferSource(); src.buffer = noiseBuffer(c)
+  const lp = c.createBiquadFilter(); lp.type = 'lowpass'; lp.frequency.value = 420
+  const ng = c.createGain()
+  ng.gain.setValueAtTime(0.0001, t)
+  ng.gain.linearRampToValueAtTime(gain * 0.3, t + 0.001)
+  ng.gain.exponentialRampToValueAtTime(0.0001, t + 0.05)
+  src.connect(lp); lp.connect(ng); ng.connect(c.__bus)
+  src.start(t); src.stop(t + 0.06)
+}
+function sub (c, t, gain = 0.1, dur = 1.2) {
+  const osc = c.createOscillator(); osc.type = 'sine'; osc.frequency.value = 55
+  const g = c.createGain()
+  g.gain.setValueAtTime(0.0001, t)
+  g.gain.linearRampToValueAtTime(gain, t + 0.02)
+  g.gain.exponentialRampToValueAtTime(0.0001, t + dur)
+  g.connect(c.__bus); osc.connect(g)
+  osc.start(t); osc.stop(t + dur + 0.02)
+}
+/* 极轻的高频气声铺底，只在开场与收尾各一次 */
+function shimmer (c, t, dur, gain = 0.03) {
+  const src = c.createBufferSource(); src.buffer = noiseBuffer(c); src.loop = true
+  const hp = c.createBiquadFilter(); hp.type = 'highpass'; hp.frequency.value = 4200
+  const g = c.createGain()
+  g.gain.setValueAtTime(0.0001, t)
+  g.gain.linearRampToValueAtTime(gain, t + dur * 0.45)
+  g.gain.exponentialRampToValueAtTime(0.0001, t + dur)
+  src.connect(hp); hp.connect(g); g.connect(c.__bus)
+  src.start(t); src.stop(t + dur + 0.02)
+}
+
+/* 长渐强气声：填满段落尾巴，把注意力推向下一幕 */
+function riser (c, t, dur, gain = 0.04, from = 260, to = 2600) {
+  const src = c.createBufferSource(); src.buffer = noiseBuffer(c); src.loop = true
+  const bp = c.createBiquadFilter(); bp.type = 'bandpass'; bp.Q.value = 0.9
+  bp.frequency.setValueAtTime(from, t)
+  bp.frequency.exponentialRampToValueAtTime(to, t + dur)
+  const g = c.createGain()
+  g.gain.setValueAtTime(0.0001, t)
+  g.gain.linearRampToValueAtTime(gain, t + dur * 0.92)
+  g.gain.linearRampToValueAtTime(0.0001, t + dur)
+  src.connect(bp); bp.connect(g); g.connect(c.__bus)
+  src.start(t); src.stop(t + dur + 0.02)
+}
+
+/* 一次排 کامل 16 秒：所有事件都在这里，画面改时间就改这张表 */
+function scheduleScore (c, bus, T) {
+  c.__bus = bus
+  const at = (t) => T + t
+  const cue = []
+
+  /* 幕 1 开场：一记落地 + 一声铃 + 气声 */
+  thump(c, at(0.02), 0.16)
+  bell(c, at(0.16), 1318.51, 0.15, 1.25, -0.15)
+  shimmer(c, at(0.02), 1.15, 0.028)
+  riser(c, at(1.48), 0.78, 0.034, 300, 2200)
+  cue.push({ t: 0.16, kind: 'bell', f: 1318.51 })
+
+  /* 幕 2 编制：六张卡依次落地，音高五声上行；三个标签轻点 */
+  whoosh(c, at(CUE.s2 + 0.02), 0.4, 0.045, 2600, 700, 0.2)
+  const PLUCK = [783.99, 880, 987.77, 1046.5, 1174.66, 1318.51]
+  PLUCK.forEach((f, i) => {
+    const t = CUE.s2 + 0.26 + i * 0.1
+    pluck(c, at(t), f, 0.05, 0.26, -0.35 + (i % 2) * 0.7)
+    cue.push({ t, kind: 'pluck', f })
+  })
+  riser(c, at(4.5), 0.95, 0.04, 240, 2600)
+  ;[0.98, 1.1, 1.22].forEach((dt, i) => {
+    tick(c, at(CUE.s2 + dt), 2093 + i * 180, 0.028, -0.2 + i * 0.2)
+  })
+
+  /* 幕 3 派单：切幕气声、键盘、三行配置、三个节点、汇总落地 */
+  whoosh(c, at(CUE.s3 + 0.01), 0.34, 0.035, 2400, 800, 0)
+  for (let i = 0; i < 18; i++) key(c, at(CUE.s3 + 0.36 + i * 0.04), 0.032, (Math.random() - .5) * .3)
+  ;[0, 1, 2].forEach((i) => {
+    tick(c, at(CUE.s3 + 1.2 + i * 0.18), 1568, 0.035, -0.1)
+    cue.push({ t: CUE.s3 + 1.2 + i * 0.18, kind: 'tick' })
+  })
+  ;[1318.51, 1567.98, 1760].forEach((f, i) => {
+    tick(c, at(CUE.s3 + 1.72 + i * 0.18), f, 0.038, 0.35 - i * 0.15)
+    pluck(c, at(CUE.s3 + 1.72 + i * 0.18), f, 0.03, 0.3, 0.35 - i * 0.15)
+    cue.push({ t: CUE.s3 + 1.72 + i * 0.18, kind: 'pluck', f })
+  })
+  riser(c, at(CUE.s3 + 3.2), 0.66, 0.034, 280, 2400)
+  thump(c, at(CUE.s3 + 2.86), 0.15, 110, 50, 0.34)
+  bell(c, at(CUE.s3 + 2.88), 1046.5, 0.1, 1.1, 0.1)
+  cue.push({ t: CUE.s3 + 2.88, kind: 'bell', f: 1046.5 })
+
+  /* 幕 4 事件：飞入、闸门三声（第三声闷）、卡片、批准、执行 */
+  whoosh(c, at(CUE.s4 + 0.1), 0.5, 0.06, 300, 2400, -0.4)
+  tick(c, at(CUE.s4 + 0.82), 1318.51, 0.04, -0.2)
+  tick(c, at(CUE.s4 + 0.99), 1567.98, 0.04, -0.2)
+  tick(c, at(CUE.s4 + 1.16), 1046.5, 0.018, -0.2)
+  pluck(c, at(CUE.s4 + 1.38), 880, 0.045, 0.24, 0.2)
+  pluck(c, at(CUE.s4 + 1.95), 523.25, 0.05, 0.42, -0.05)
+  cue.push({ t: CUE.s4 + 1.38, kind: 'pluck', f: 880 })
+  tick(c, at(CUE.s4 + 2.5), 2637, 0.05, 0.25)
+  bell(c, at(CUE.s4 + 2.58), 1567.98, 0.085, 0.9, 0.2)
+  bell(c, at(CUE.s4 + 2.64), 2093, 0.055, 1.0, 0.25)
+  cue.push({ t: CUE.s4 + 2.58, kind: 'bell', f: 1567.98 })
+
+  /* 幕 5 收尾：四个标签、终声长铃与低频收底 */
+  thump(c, at(CUE.s5 + 0.04), 0.13)
+  ;[1760, 1975.53, 2093, 2349.32].forEach((f, i) => {
+    tick(c, at(CUE.s5 + 1.02 + i * 0.11), f, 0.03, -0.3 + i * 0.2)
+  })
+  bell(c, at(CUE.s5 + 1.62), 2093, 0.13, 1.6, 0)
+  sub(c, at(CUE.s5 + 1.62), 0.085, 1.45)
+  shimmer(c, at(CUE.s5 + 1.6), 1.1, 0.022)
+  cue.push({ t: CUE.s5 + 1.62, kind: 'bell', f: 2093 })
+
+  /* 收尾总淡出 */
+  bus.gain.setValueAtTime(bus.gain.value, at(16.0))
+  bus.gain.linearRampToValueAtTime(0.0001, at(16.38))
+  return cue
+}
+
+/* ------------------------------------------------------------ 录制 / 播放 */
+let ac = null
+let audioStart = 0
+let wall0 = null
+let paused = false
+let pausedAt = 0
+let pausedT = 0
+let lastT = 0
+const ui = document.getElementById('ui')
+const toggle = document.getElementById('toggle')
+const replay = document.getElementById('replay')
+const fill = document.getElementById('fill')
+const clock = document.getElementById('clock')
+let destStream = null
+
+/* 整条音轨先离线渲染成一块 AudioBuffer：录制时只启一个 buffer source，
+ * 既不会因为排程耗时把起点推后，也保证成片音轨与导出的 WAV 完全一致。 */
+let trackPromise = null
+function buildTrack () {
+  if (!trackPromise) {
+    trackPromise = (async () => {
+      const rate = 48000
+      const OC = window.OfflineAudioContext || window.webkitOfflineAudioContext
+      const oc = new OC(2, Math.ceil(rate * (DUR + 0.6)), rate)
+      const chain = makeChain(oc, oc.destination)
+      scheduleScore(oc, chain.input, 0)
+      return await oc.startRendering()
+    })()
+  }
+  return trackPromise
+}
+
+async function bootAudio () {
+  if (ac) { try { await ac.close() } catch { /* 已关闭 */ } }
+  ac = new AudioContext({ sampleRate: 48000 })
+  if (ac.state === 'suspended') await ac.resume()
+  if (ac.state !== 'running') { console.error('[promo] audio suspended'); return null }
+  destStream = ac.createMediaStreamDestination()
+  return destStream
+}
+
+/* 画面时钟与音轨共用 audioStart：t=0 就是音轨第 0 帧 */
+function startTrack (buffer, monitor) {
+  const src = ac.createBufferSource()
+  src.buffer = buffer
+  const g = ac.createGain(); g.gain.value = 1
+  src.connect(g)
+  g.connect(destStream)
+  if (monitor) g.connect(ac.destination)
+  audioStart = ac.currentTime + 0.08
+  src.start(audioStart)
+  return audioStart
+}
+
+function timeNow (now) {
+  if (ac && ac.state === 'running') return ac.currentTime - audioStart
+  return (now - wall0) / 1000
+}
+
+function stopAudio () {
+  if (!ac) return
+  try { ac.close() } catch { /* 已关闭 */ }
+  ac = null
+}
+
+function renderFrame (t) {
+  background(t)
+  for (const s of SCENES) {
+    if (t >= s.t0 && t < s.t1) {
+      const lt = t - s.t0, p = lt / (s.t1 - s.t0)
+      ctx.save()
+      ctx.translate(0, (1 - ease(clamp(lt * 4))) * 8)
+      s.draw(lt, p, s.t1 - s.t0)
+      ctx.restore()
+    }
+  }
+  if (t >= DUR) { ctx.fillStyle = '#050409'; ctx.fillRect(0, 0, W, H) }
+}
+
+function frame (now) {
+  if (wall0 === null) wall0 = now
+  let t = timeNow(now)
+  if (paused) t = pausedT
+  t = Math.max(0, t)
+  if (!paused) lastT = t
+  if (!AUTO) t = t % DUR
+  renderFrame(t)
+  if (!AUTO) {
+    fill.style.width = (Math.min(t, DUR) / DUR * 100).toFixed(1) + '%'
+    clock.textContent = Math.min(t, DUR).toFixed(1) + 's / ' + DUR + 's'
+  }
+  if (AUTO && t >= DUR + 0.1) return
+  requestAnimationFrame(frame)
+}
+
+async function startRecording () {
+  const candidates = [
+    'video/mp4;codecs=avc1.42E01E,mp4a.40.2',
+    'video/mp4',
+    'video/webm;codecs=vp9,opus',
+    'video/webm'
+  ]
+  const mime = candidates.find((m) => window.MediaRecorder && MediaRecorder.isTypeSupported(m))
+  if (!mime) { console.error('[promo] MediaRecorder 不可用'); return }
+  console.log('[promo] mime ' + mime)
+
+  const track = await buildTrack()
+  await bootAudio()
+  renderFrame(0)
+  const videoTrack = c.captureStream(30).getVideoTracks()[0]
+  const tracks = [videoTrack]
+  if (destStream) tracks.push(...destStream.stream.getAudioTracks())
+  const stream = new MediaStream(tracks)
+  const rec = new MediaRecorder(stream, {
+    mimeType: mime,
+    videoBitsPerSecond: 7000000,
+    audioBitsPerSecond: 192000
+  })
+  const chunks = []
+  rec.ondataavailable = (e) => { if (e.data.size) chunks.push(e.data) }
+  rec.onstop = async () => {
+    const buf = await new Blob(chunks, { type: mime }).arrayBuffer()
+    window.promo.save(buf)
+  }
+  rec.start(250)
+  startTrack(track, false)
+  requestAnimationFrame(frame)
+  setTimeout(() => rec.stop(), (DUR + 0.3) * 1000)
+}
+
+/* 单独导出音轨，供试听与波形核对 */
+async function exportWav () {
+  const rate = 48000
+  const buf = await buildTrack()
+  const chs = [buf.getChannelData(0), buf.getChannelData(1)]
+  const n = buf.length
+  const ab = new ArrayBuffer(44 + n * 4)
+  const dv = new DataView(ab)
+  const str = (o, s) => { for (let i = 0; i < s.length; i++) dv.setUint8(o + i, s.charCodeAt(i)) }
+  str(0, 'RIFF'); dv.setUint32(4, 36 + n * 4, true); str(8, 'WAVE')
+  str(12, 'fmt '); dv.setUint32(16, 16, true); dv.setUint16(20, 1, true); dv.setUint16(22, 2, true)
+  dv.setUint32(24, rate, true); dv.setUint32(28, rate * 4, true); dv.setUint16(32, 4, true); dv.setUint16(34, 16, true)
+  str(36, 'data'); dv.setUint32(40, n * 4, true)
+  let o = 44
+  for (let i = 0; i < n; i++) {
+    for (let ch = 0; ch < 2; ch++) {
+      const v = Math.max(-1, Math.min(1, chs[ch][i]))
+      dv.setInt16(o, v < 0 ? v * 0x8000 : v * 0x7fff, true); o += 2
+    }
+  }
+  window.promo.save(ab)
+}
+
+if (AUTO) {
+  const go = () => {
+    if (MODE === 'wav') exportWav()
+    else startRecording()
+  }
+  if (document.readyState === 'complete') go()
+  else addEventListener('load', go)
+} else {
+  ui.hidden = false
+  const restart = async (withSound) => {
+    stopAudio()
+    pausedT = 0; paused = false
+    toggle.textContent = '暂停'
+    if (withSound) {
+      const track = await buildTrack()
+      await bootAudio()
+      startTrack(track, true)
+    } else {
+      wall0 = performance.now()
+    }
+    requestAnimationFrame(frame)
+  }
+  toggle.onclick = async () => {
+    paused = !paused
+    toggle.textContent = paused ? '播放' : '暂停'
+    if (paused) {
+      pausedT = lastT
+      pausedAt = performance.now()
+      if (ac && ac.state === 'running') ac.suspend().catch(() => {})
+    } else if (ac && ac.state === 'suspended') {
+      await ac.resume()
+    } else {
+      wall0 += performance.now() - pausedAt
+    }
+  }
+  replay.onclick = () => restart(true)
+  if (document.readyState === 'complete') restart(false)
+  else addEventListener('load', () => restart(false))
+}
+</script>

@@ -1,0 +1,73 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="36" height="36" viewBox="0 0 36 36" fill="none" role="img" aria-label="星界流星图标">
+  <defs>
+    <radialGradient id="halo" cx="18" cy="18" r="18" gradientUnits="userSpaceOnUse">
+      <stop offset="0" stop-color="#F1E4FF" stop-opacity=".45"/>
+      <stop offset=".3" stop-color="#D2BAFF" stop-opacity=".24"/>
+      <stop offset=".66" stop-color="#AC8AEA" stop-opacity=".07"/>
+      <stop offset="1" stop-color="#8F6BD4" stop-opacity="0"/>
+    </radialGradient>
+
+    <radialGradient id="body" cx="18" cy="17.1" r="15.2" gradientUnits="userSpaceOnUse">
+      <stop offset="0" stop-color="#FBF4FF"/>
+      <stop offset=".08" stop-color="#F3E4FF"/>
+      <stop offset=".22" stop-color="#E5CEFF"/>
+      <stop offset=".42" stop-color="#D2B3FF"/>
+      <stop offset=".62" stop-color="#BE99F4"/>
+      <stop offset=".82" stop-color="#A77FE2"/>
+      <stop offset="1" stop-color="#8C67CA"/>
+    </radialGradient>
+
+    <radialGradient id="core" cx="17.6" cy="16.8" r="3.8" gradientUnits="userSpaceOnUse">
+      <stop offset="0" stop-color="#F8EDFF"/>
+      <stop offset=".3" stop-color="#ECD8FF"/>
+      <stop offset=".6" stop-color="#DCC2FF"/>
+      <stop offset=".85" stop-color="#C6A6F2"/>
+      <stop offset="1" stop-color="#C6A6F2" stop-opacity="0"/>
+    </radialGradient>
+
+    <radialGradient id="diag" cx="18" cy="18" r="9.2" gradientUnits="userSpaceOnUse">
+      <stop offset="0" stop-color="#F4E9FF" stop-opacity=".62"/>
+      <stop offset=".55" stop-color="#D7C0FF" stop-opacity=".42"/>
+      <stop offset="1" stop-color="#B494EE" stop-opacity=".28"/>
+    </radialGradient>
+
+    <linearGradient id="arc" x1="7" y1="16" x2="18" y2="7" gradientUnits="userSpaceOnUse">
+      <stop offset="0" stop-color="#C7ABFF" stop-opacity="0"/>
+      <stop offset=".35" stop-color="#D8C5FF" stop-opacity=".5"/>
+      <stop offset=".75" stop-color="#EEE4FF" stop-opacity=".8"/>
+      <stop offset="1" stop-color="#D3BDFF" stop-opacity="0"/>
+    </linearGradient>
+
+    <filter id="soft" x="-60%" y="-60%" width="220%" height="220%">
+      <feGaussianBlur stdDeviation="2.4"/>
+    </filter>
+  </defs>
+
+  <!-- 柔和星晕：完全透明的底，只留紫色光 -->
+  <circle cx="18" cy="18" r="18" fill="url(#halo)"/>
+
+  <!-- 柔和底光，不带拖尾 -->
+  <path d="M18 3.8 C18.5 12.4 19.4 15.9 32.4 18 C19.4 20.1 18.5 23.6 18 32.2 C17.5 23.6 16.6 20.1 3.6 18 C16.6 15.9 17.5 12.4 18 3.8 Z"
+        fill="#B79AF1" opacity=".3" filter="url(#soft)"/>
+
+  <!-- 四向短光刺，制造流星头部的不规则光感（无尾） -->
+  <g transform="rotate(45 18 18)" fill="url(#diag)">
+    <path d="M18 8.6 C18.35 14.2 20.2 16.05 25.65 18 C20.2 19.95 18.35 21.8 18 27.4 C17.65 21.8 15.8 19.95 10.35 18 C15.8 16.05 17.65 14.2 18 8.6 Z"/>
+  </g>
+
+  <!-- 头部细光弧，呼应动态流星头部的旋转光环；不封口、不拖尾 -->
+  <path d="M7.0 15.2 A11.2 11.2 0 0 1 19.4 6.9"
+        fill="none" stroke="#C7ABFF" stroke-width="2.4" stroke-linecap="round" opacity=".1"/>
+  <path d="M7.0 15.2 A11.2 11.2 0 0 1 19.4 6.9"
+        fill="none" stroke="url(#arc)" stroke-width=".8" stroke-linecap="round" opacity=".85"/>
+
+  <!-- 星体主光：细长放射星芒 + 白热核心 -->
+  <path d="M18 3.8 C18.5 12.4 19.4 15.9 32.4 18 C19.4 20.1 18.5 23.6 18 32.2 C17.5 23.6 16.6 20.1 3.6 18 C16.6 15.9 17.5 12.4 18 3.8 Z"
+        fill="url(#body)"/>
+
+  <!-- 星头核心 -->
+  <circle cx="17.8" cy="17.2" r="3.8" fill="url(#core)"/>
+
+  <!-- 极小的高光点，保持边缘干净 -->
+  <circle cx="16.4" cy="15.8" r=".95" fill="#FFFFFF" opacity=".85"/>
+</svg>

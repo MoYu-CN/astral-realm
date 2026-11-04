@@ -1,0 +1,29 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8">
+  <meta http-equiv="Content-Security-Policy" content="default-src 'self'; style-src 'self' 'unsafe-inline'; script-src 'self'; img-src 'self' data:;">
+  <title>星界 · 确认</title>
+  <link rel="stylesheet" href="css/confirm.css">
+</head>
+<body>
+  <div class="confirm-window">
+    <div class="confirm-card" role="dialog" aria-modal="true" aria-labelledby="confirm-title">
+      <div class="confirm-top" id="confirm-top">
+        <span class="confirm-brand"><b>✦</b> 星界 <small>ASTRAL REALM</small></span>
+        <button class="confirm-x" id="confirm-x" type="button" aria-label="取消">✕</button>
+      </div>
+      <div class="confirm-main">
+        <div class="confirm-head">
+          <span class="confirm-icon" id="confirm-icon" aria-hidden="true">?</span>
+          <h1 id="confirm-title">确认操作</h1>
+        </div>
+        <p class="confirm-message" id="confirm-message"></p>
+        <pre class="confirm-detail" id="confirm-detail" hidden></pre>
+      </div>
+      <div class="confirm-actions" id="confirm-actions"></div>
+    </div>
+  </div>
+  <script src="js/confirm-window.js"></script>
+</body>
+</html>

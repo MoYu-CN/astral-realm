@@ -1,0 +1,81 @@
+{
+  "theme": "astral",
+  "appearance": {
+    "reducedMotion": false,
+    "winTransition": "slide",
+    "starSpin": 0.25
+  },
+  "motion": {
+    "speed": 1
+  },
+  "bridge": {
+    "enabled": true,
+    "port": 45871,
+    "token": ""
+  },
+  "sfx": {
+    "enabled": true,
+    "startup": true,
+    "volume": 0.5
+  },
+  "triggers": {
+    "mode": "observe",
+    "sources": [],
+    "keywords": [],
+    "dedupe": true,
+    "quietHours": null,
+    "watchdog": { "enabled": true, "threshold": 3 },
+    "events": []
+  },
+  "orchestration": {
+    "maxRounds": 2,
+    "parallel": true,
+    "showPlan": true
+  },
+  "context": {
+    "historyLimit": 24,
+    "maxTokens": 12000
+  },
+  "profile": {
+    "name": "",
+    "short": "",
+    "avatar": "",
+    "likes": ""
+  },
+  "permissions": {
+    "full": false,
+    "readFiles": true,
+    "writeFiles": false,
+    "runCommands": false,
+    "network": false,
+    "memory": false
+  },
+  "agentDefaults": {
+    "permissions": {}
+  },
+  "dataFiles": [],
+  "speech": {
+    "engine": "auto",
+    "providerId": "",
+    "model": "whisper-1",
+    "lang": "zh-CN",
+    "localModels": [],
+    "localModelId": ""
+  },
+  "plugins": {
+    "knowledge": {
+      "enabled": true
+    }
+  },
+  "onboarding": {
+    "knowledgePrompted": false
+  },
+  "view": "user",
+  "retry": {
+    "enabled": true,
+    "maxAttempts": 3,
+    "timeoutSec": 60,
+    "baseDelayMs": 1000,
+    "maxDelayMs": 8000
+  }
+}
