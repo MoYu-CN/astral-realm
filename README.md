@@ -10,6 +10,22 @@
 
 ![status](https://img.shields.io/badge/version-0.1.0-8b9cff) ![license](https://img.shields.io/badge/license-MIT-5eead4)
 
+[简体中文](#它是什么) · [English](#english)
+
+## English
+
+**Astral Realm** is a multi-agent, multi-model desktop workspace. You define a team; the commander breaks a goal into tasks, deputies and executors work in parallel, and the task trail shows each delivery in real time.
+
+- Multi-agent roster: commander, deputies, and executors, all editable.
+- Per-member models, prompts, skills, and context.
+- Solo, team, and plugin conversations are isolated.
+- Task trail, Markdown tables, copyable code blocks, and Mermaid diagrams.
+- Context-aware prompt enhancement and in-app skill management.
+- Themes, MCP tools, plugins, and prompt customization.
+- Lightweight: zero-build frontend, Electron shell, MIT license.
+
+Read the Chinese introduction below, or switch the app language in **Settings → Appearance → Interface language**.
+
 ---
 
 ## 它是什么
