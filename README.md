@@ -29,6 +29,14 @@
 
 更多介绍见 [docs/简介.md](docs/简介.md)。
 
+## 界面语言
+
+设置 → 外观 → **界面语言**，内置简体中文与 English，切换立即生效并写入 `settings.json`。
+
+其他语言放入 `config/locales/<code>.json`，字段为 `code / name / nativeName / dir / title / messages`；`messages` 使用中文源文案作为键，未翻译的条目自动回退中文。运行时也可以调用 `window.Astral.i18n.registerLocale()` 注册语言包。
+
+聊天正文、代码和用户输入不会被自动翻译；英文包先覆盖主壳、输入区、任务与上下文、设置导航、外观、新会话和常用操作。详见 [docs/i18n.md](docs/i18n.md)。
+
 ## 默认提示词
 
 所有成员的系统提示词开头都会注入同一段简短默认规范：

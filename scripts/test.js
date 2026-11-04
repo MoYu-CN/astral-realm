@@ -750,6 +750,22 @@ test('启动动画配色跟随主题：色板由 token 派生，且启动前预�
   assert.match(effects, /export function bootTheme/, '启动时应使用 bootTheme 接住插件主题')
 })
 
+test('界面语言包可扩展，英文覆盖核心界面且缺词回退中文', () => {
+  const dir = path.join(__dirname, '..', 'app', 'locales')
+  const zh = JSON.parse(fs.readFileSync(path.join(dir, 'zh-CN.json'), 'utf8'))
+  const en = JSON.parse(fs.readFileSync(path.join(dir, 'en-US.json'), 'utf8'))
+  assert.equal(zh.code, 'zh-CN')
+  assert.equal(en.code, 'en-US')
+  assert.equal(zh.messages && Object.keys(zh.messages).length, 0)
+  for (const key of ['设置', '新对话', '发送', '任务', '界面语言', '新会话']) {
+    assert.ok(en.messages[key], `英文语言包缺少：${key}`)
+  }
+  const i18n = fs.readFileSync(path.join(__dirname, '..', 'app', 'js', 'i18n.js'), 'utf8')
+  assert.match(i18n, /registerLocale/)
+  assert.match(i18n, /setLocales/)
+  assert.match(i18n, /config\/locales/)
+})
+
 ;(async () => {
   for (const item of tests) {
     await item.fn()

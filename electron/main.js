@@ -449,8 +449,68 @@ ipcMain.handle('astral:skills:delete', async (_event, payload = {}) => {
   }
 })
 
-async function collectThemes () {
-  const out = []
+/* ------------------------------------------------------- 界面语言/主进程文案 */
+
+let mainLocale = 'zh-CN'
+let mainMessages = {}
+
+function normalizeLocaleData (raw) {
+  if (!raw || typeof raw !== 'object') return null
+  const code = String(raw.code || '').trim()
+  if (!/^[A-Za-z]{2,3}(?:-[A-Za-z0-9]{2,8})*$/.test(code)) return null
+  return {
+    code,
+    name: String(raw.name || raw.nativeName || code),
+    nativeName: String(raw.nativeName || raw.name || code),
+    dir: raw.dir === 'rtl' ? 'rtl' : 'ltr',
+    title: String(raw.title || ''),
+    messages: raw.messages && typeof raw.messages === 'object' ? { ...raw.messages } : {}
+  }
+}
+
+async function collectLocales () {
+  const found = new Map()
+  for (const dir of [path.join(APP_DIR, 'locales'), path.join(CONFIG_DIR, 'locales')]) {
+    let files = []
+    try { files = await fsp.readdir(dir) } catch { continue }
+    for (const name of files) {
+      if (!name.endsWith('.json')) continue
+      try {
+        const raw = JSON.parse(await fsp.readFile(path.join(dir, name), 'utf8'))
+        const data = normalizeLocaleData(raw)
+        if (data) found.set(data.code, data)
+      } catch (err) {
+        console.error(`[i18n] 忽略无效语言文件 ${name}: ${err.message}`)
+      }
+    }
+  }
+  if (!found.has('zh-CN')) {
+    found.set('zh-CN', { code: 'zh-CN', name: 'Chinese (Simplified)', nativeName: '简体中文', dir: 'ltr', title: '星界', messages: {} })
+  }
+  return [...found.values()].sort((a, b) => a.code === 'zh-CN' ? -1 : b.code === 'zh-CN' ? 1 : a.code.localeCompare(b.code))
+}
+
+async function loadMainLocale (code) {
+  const list = await collectLocales()
+  const wanted = String(code || 'zh-CN')
+  const item = list.find((entry) => entry.code === wanted) || list.find((entry) => entry.code === 'zh-CN')
+  mainLocale = item ? item.code : 'zh-CN'
+  mainMessages = item ? item.messages : {}
+  return list
+}
+
+function mainT (source) {
+  if (mainLocale === 'zh-CN') return source
+  return mainMessages[source] || source
+}
+
+ipcMain.handle('astral:setLanguage', async (_event, code) => {
+  await loadMainLocale(code)
+  refreshTray()
+  return { ok: true, locale: mainLocale }
+})
+
+async function collectThemes () {  const out = []
   const seen = new Set()
   for (const dir of [path.join(APP_DIR, 'themes'), path.join(CONFIG_DIR, 'themes')]) {
     let files = []
@@ -1100,9 +1160,9 @@ async function confirmToolCall (effective, decision) {
       message: '这个工具会在你的电脑上执行实际操作',
       detail,
       actions: [
-        { value: 0, label: '允许一次', style: 'primary' },
-        { value: 1, label: '始终允许', style: 'ghost' },
-        { value: 2, label: '拒绝', style: 'danger' }
+        { value: 0, label: mainT('允许一次'), style: 'primary' },
+        { value: 1, label: mainT('始终允许'), style: 'ghost' },
+        { value: 2, label: mainT('拒绝'), style: 'danger' }
       ],
       cancelValue: 2,
       themeTokens: await dialogThemeTokens(),
@@ -1456,6 +1516,7 @@ async function bootPayload () {
     teamTemplates,
     themes: await collectThemes(),
     skills: await collectSkills(),
+    locales: await collectLocales(),
     plugins: await collectPlugins(),
     bridge: { port: bridgePort, token: bridgeToken },
     dirs: { config: CONFIG_DIR, app: APP_DIR, root: ROOT, data: path.join(CONFIG_DIR, 'data'), projects: PROJECT_SESSIONS_DIR() },
@@ -1577,7 +1638,7 @@ ipcMain.handle('astral:knowledge:pick-dir', async () => {
   if (!mainWindow) return { ok: false, error: '窗口尚未就绪' }
   const result = await dialog.showOpenDialog(mainWindow, {
     title: '选择知识库父目录',
-    buttonLabel: '使用此目录',
+    buttonLabel: mainT('使用此目录'),
     properties: ['openDirectory', 'createDirectory']
   })
   if (result.canceled || !result.filePaths.length) return { ok: false, canceled: true }
@@ -1641,8 +1702,8 @@ async function confirmRunOwner (authority) {
         '「信任并记住」只在当前项目生效，可在 设置 → 运行 里清除。'
       ].join('\n'),
       actions: [
-        { value: 0, label: '信任并记住', style: 'primary' },
-        { value: 1, label: '仅本次', style: 'ghost' },
+        { value: 0, label: mainT('信任并记住'), style: 'primary' },
+        { value: 1, label: mainT('仅本次'), style: 'ghost' },
         { value: 2, label: '取消', style: 'danger' }
       ],
       cancelValue: 2,
@@ -1774,7 +1835,7 @@ ipcMain.handle('astral:pickFolder', async () => {
   if (!mainWindow) return ''
   const result = await dialog.showOpenDialog(mainWindow, {
     title: '选择项目文件夹',
-    buttonLabel: '使用此文件夹',
+    buttonLabel: mainT('使用此文件夹'),
     properties: ['openDirectory', 'createDirectory']
   })
   return result.canceled || !result.filePaths.length ? '' : result.filePaths[0]
@@ -1969,9 +2030,9 @@ ipcMain.handle('astral:pickImage', async () => {
   if (!mainWindow) return null
   const result = await dialog.showOpenDialog(mainWindow, {
     title: '选择头像',
-    buttonLabel: '使用',
+    buttonLabel: mainT('使用'),
     properties: ['openFile'],
-    filters: [{ name: '图片', extensions: ['png', 'jpg', 'jpeg', 'webp', 'gif', 'bmp'] }]
+    filters: [{ name: mainT('图片'), extensions: ['png', 'jpg', 'jpeg', 'webp', 'gif', 'bmp'] }]
   })
   if (result.canceled || !result.filePaths.length) return null
   const file = result.filePaths[0]
@@ -1993,12 +2054,12 @@ ipcMain.handle('astral:pickFiles', async (_event, projectRoot = '') => {
   }
   const result = await dialog.showOpenDialog(mainWindow, {
     title: rootReal ? '添加项目文件' : '添加参考文件',
-    buttonLabel: '添加',
+    buttonLabel: mainT('添加'),
     defaultPath: rootReal || undefined,
     properties: ['openFile', 'multiSelections'],
     filters: [
-      { name: '文本与代码', extensions: [...TEXT_EXT].map((e) => e.replace('.', '')) },
-      { name: '全部文件', extensions: ['*'] }
+      { name: mainT('文本与代码'), extensions: [...TEXT_EXT].map((e) => e.replace('.', '')) },
+      { name: mainT('全部文件'), extensions: ['*'] }
     ]
   })
   if (result.canceled) return { files: [], rejected: 0 }
@@ -2070,13 +2131,13 @@ ipcMain.handle('astral:pickDataFile', async () => {
   const exts = [...DATA_EXT].map((e) => e.replace('.', ''))
   const result = await dialog.showOpenDialog(mainWindow, {
     title: '选择数据权限文件',
-    buttonLabel: '上传',
+    buttonLabel: mainT('上传'),
     properties: ['openFile'],
     filters: [
-      { name: '全部支持的类型', extensions: exts },
-      { name: '图片', extensions: ['jpg', 'jpeg', 'png', 'gif', 'webp', 'bmp', 'svg'] },
-      { name: '文档', extensions: ['pdf', 'doc', 'docx', 'xls', 'xlsx', 'ppt', 'pptx'] },
-      { name: '文本与数据', extensions: ['txt', 'md', 'csv', 'json', 'xml', 'yaml', 'yml', 'toml', 'ini', 'sql', 'log', 'env', 'tsv', 'jsonl', 'jsonc', 'markdown'] },
+      { name: mainT('全部支持的类型'), extensions: exts },
+      { name: mainT('图片'), extensions: ['jpg', 'jpeg', 'png', 'gif', 'webp', 'bmp', 'svg'] },
+      { name: mainT('文档'), extensions: ['pdf', 'doc', 'docx', 'xls', 'xlsx', 'ppt', 'pptx'] },
+      { name: mainT('文本与数据'), extensions: ['txt', 'md', 'csv', 'json', 'xml', 'yaml', 'yml', 'toml', 'ini', 'sql', 'log', 'env', 'tsv', 'jsonl', 'jsonc', 'markdown'] },
       { name: '所有文件', extensions: ['*'] }
     ]
   })
@@ -2402,7 +2463,7 @@ ipcMain.handle('astral:speech-models:pick', async () => {
   if (!mainWindow) return { ok: false, error: '窗口尚未就绪' }
   const result = await dialog.showOpenDialog(mainWindow, {
     title: '选择 SenseVoice 模型文件夹',
-    buttonLabel: '使用此模型',
+    buttonLabel: mainT('使用此模型'),
     properties: ['openDirectory']
   })
   if (result.canceled || !result.filePaths.length) return { ok: false, canceled: true }
@@ -2480,12 +2541,12 @@ function showTrayHintOnce () {
   try {
     if (process.platform === 'win32') {
       tray.displayBalloon({
-        title: '星界仍在后台运行',
-        content: '窗口已收起。对话、任务和 MCP 桥都没中断，点托盘图标可以随时叫回来；右键托盘可以退出。',
+        title: mainT('星界仍在后台运行'),
+        content: mainT('窗口已收起。对话、任务和 MCP 桥都没中断，点托盘图标可以随时叫回来；右键托盘可以退出。'),
         iconType: 'info'
       })
     } else if (process.platform === 'darwin') {
-      tray.setToolTip('星界 · 后台运行中（点图标回到窗口）')
+      tray.setToolTip(mainT('星界 · 后台运行中（点图标回到窗口）'))
     }
   } catch { /* 通知被系统关掉也不影响后台运行 */ }
 }
@@ -2495,22 +2556,22 @@ function refreshTray () {
   const visible = Boolean(
     mainWindow && !mainWindow.isDestroyed() && mainWindow.isVisible() && !mainWindow.isMinimized()
   )
-  tray.setToolTip(visible ? '星界 · 运行中' : '星界 · 后台运行中')
+  tray.setToolTip(visible ? mainT('星界 · 运行中') : mainT('星界 · 后台运行中'))
   tray.setContextMenu(Menu.buildFromTemplate([
     {
-      label: visible ? '星界正在前台' : '打开星界窗口',
+      label: visible ? mainT('星界正在前台') : mainT('打开星界窗口'),
       enabled: !visible,
       click: () => showMainWindow()
     },
     {
-      label: '收起窗口（继续后台运行）',
+      label: mainT('收起窗口（继续后台运行）'),
       enabled: visible,
       click: () => hideMainWindow()
     },
     { type: 'separator' },
-    { label: closeToTray ? '关闭窗口：驻留后台' : '关闭窗口：退出程序', enabled: false },
+    { label: closeToTray ? mainT('关闭窗口：驻留后台') : mainT('关闭窗口：退出程序'), enabled: false },
     { type: 'separator' },
-    { label: '退出星界', click: () => quitApp() }
+    { label: mainT('退出星界'), click: () => quitApp() }
   ]))
 }
 
@@ -2803,8 +2864,8 @@ if (!gotSingleInstanceLock) {
             '继续使用当前窗口会运行旧渲染代码。请选择「现在重启」加载新构建；如果正在执行任务，可以选择稍后手动退出。'
           ].join('\n'),
           actions: [
-            { value: 0, label: '现在重启', style: 'primary' },
-            { value: 1, label: '稍后', style: 'ghost' }
+            { value: 0, label: mainT('现在重启'), style: 'primary' },
+            { value: 1, label: mainT('稍后'), style: 'ghost' }
           ],
           cancelValue: 1,
           themeTokens: await dialogThemeTokens(),
@@ -2830,6 +2891,7 @@ app.whenReady().then(async () => {
   registerAppProtocol()
   await ensureConfig()
   const settings = await readJson(path.join(CONFIG_DIR, 'settings.json'), {})
+  await loadMainLocale(settings.language || 'zh-CN')
   const backgroundCfg = await readJson(BACKGROUND_FILE(), {})
   trayHintShown = Boolean(backgroundCfg.hintShown)
   applyBackgroundPref(!settings.app || settings.app.closeToTray !== false)
@@ -2868,3 +2930,5 @@ app.on('before-quit', () => {
 
 /* keep a reference so electron's net module is not tree-shaken away by linters */
 void net
+
+

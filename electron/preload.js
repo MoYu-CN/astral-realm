@@ -4,6 +4,7 @@ const { contextBridge, ipcRenderer } = require('electron')
 
 contextBridge.exposeInMainWorld('astral', {
   boot: () => ipcRenderer.invoke('astral:boot'),
+  setLanguage: (code) => ipcRenderer.invoke('astral:setLanguage', code),
   saveConfig: (file, data) => ipcRenderer.invoke('astral:saveConfig', file, data),
   loadSession: () => ipcRenderer.invoke('astral:session:load'),
   saveSession: (data) => ipcRenderer.invoke('astral:session:save', data),

@@ -29,6 +29,7 @@ import {
 } from './triggers.js'
 import { MODES, MAX_EVENTS } from './triggers-core.js'
 import { play as sfxPlay, config as sfxConfig, setConfig as setSfxConfig } from './sfx.js'
+import { availableLocales, currentLocale, setLocale, t } from './i18n.js'
 
 export function openSettings (tab = 'providers') {
   openModal({
@@ -1269,7 +1270,25 @@ function auditSection () {
 function renderAppearance (body) {
   const settings = state.settings
   const apply = state.settings.appearance || (state.settings.appearance = {})
-  body.append(h('div', { class: 'pane-title', text: '主题' }))
+  body.append(h('div', { class: 'pane-title', text: '语言' }))
+  const language = h('select', { class: 'select', 'data-i18n-skip': '' },
+    ...availableLocales().map((item) => h('option', {
+      value: item.code,
+      selected: item.code === currentLocale()
+    }, item.nativeName))
+  )
+  language.addEventListener('change', async () => {
+    const code = language.value
+    state.settings.language = code
+    persist.settings()
+    setLocale(code)
+    if (window.astral.setLanguage) await window.astral.setLanguage(code).catch(() => {})
+    toast(t('界面语言已切换'))
+  })
+  body.append(field('界面语言', language,
+    '其他语言可放入 config/locales/<code>.json；界面会读取 code、nativeName 和 messages。'))
+
+  body.append(h('div', { class: 'pane-title', style: { marginTop: '18px' }, text: '主题' }))
   const grid = h('div', { style: { display: 'grid', gridTemplateColumns: 'repeat(2, 1fr)', gap: '10px', marginBottom: '6px' } })
   for (const theme of state.themes) {
     const active = (settings.theme || 'astral') === theme.id

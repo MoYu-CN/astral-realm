@@ -29,6 +29,7 @@ import { refreshMcp } from './mcp.js'
 import { mountRunRecovery } from './runrecovery.js'
 import { loadJobs, maybeResumeJobs, startJobScheduler } from './jobs.js'
 import { mountSearch } from './search.js'
+import { initI18n, i18n } from './i18n.js'
 
 let status = '待命中'
 
@@ -239,6 +240,7 @@ async function boot () {
     const data = await window.astral.boot()
 
   state.settings = data.settings || {}
+  initI18n(data.locales || [], state.settings.language || 'zh-CN')
   /* 配置就绪后才启动音效：用户关掉音效时本次启动就不会响；
      组曲按 shownAt 对齐 CSS 动画，已错过的节拍自动跳过 */
   mountSfx()
@@ -312,6 +314,7 @@ async function boot () {
     applyTheme,
     triggers: { emitEvent, approveEvent, ignoreEvent, listEvents, config: triggerConfig },
     sfx: { play, playStartup, renderOffline, config: sfxConfig, setConfig: setSfxConfig, debug: sfxDebug },
+    i18n,
     resetLayout,
     setView
   }
