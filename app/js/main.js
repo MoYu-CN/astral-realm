@@ -30,6 +30,7 @@ import { mountRunRecovery } from './runrecovery.js'
 import { loadJobs, maybeResumeJobs, startJobScheduler } from './jobs.js'
 import { mountSearch } from './search.js'
 import { initI18n, i18n } from './i18n.js'
+import { autoCheckUpdate } from './updater.js'
 
 let status = '待命中'
 
@@ -322,6 +323,8 @@ async function boot () {
   mountRunRecovery().catch((err) => console.error('[run recovery]', err))
   startJobScheduler()
   setTimeout(() => maybeResumeJobs().catch((err) => console.error('[jobs]', err)), 300)
+  /* 更新检查放到启动动画与首屏之后：先让界面可用，再去问 GitHub */
+  setTimeout(() => autoCheckUpdate().catch((err) => console.error('[update]', err)), 4000)
   setTimeout(() => $('#input').focus(), 120)
 }
 

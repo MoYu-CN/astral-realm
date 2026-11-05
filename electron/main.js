@@ -20,6 +20,7 @@ const { createPermissionAuthority, intersectPermissions } = require('./permissio
 const { createSecrets } = require('./secrets.js')
 const { normalizePluginManifest } = require('./plugin-manifest.js')
 const { buildInfo } = require('./build-info.js')
+const { checkForUpdate, GITHUB_REPO } = require('./update-check.js')
 const { showThemedConfirm } = require('./confirm-window.js')
 
 /* 启动动画音效在没有任何用户手势时就要播放；桌面应用内容全部本地，
@@ -1355,6 +1356,12 @@ ipcMain.handle('astral:audit:list', async (_event, payload = {}) => toolGateway.
 ipcMain.handle('astral:audit:capabilities', async () => toolGateway.describeCapabilities())
 ipcMain.handle('astral:build:info', async () => currentBuildInfo())
 
+/* 只检查、不安装：真正的更新由用户去 GitHub 取包。 */
+ipcMain.handle('astral:update:check', async (_event, payload = {}) => checkForUpdate({
+  currentVersion: app.getVersion(),
+  force: Boolean(payload && payload.force)
+}))
+
 /* 尚未完成的发布/集成能力：明确返回 unsupported，调用方不要假装已具备。 */
 ipcMain.handle('astral:capabilities', async () => ({
   ok: true,
@@ -1363,8 +1370,10 @@ ipcMain.handle('astral:capabilities', async () => ({
     reason: '未配置代码签名证书（需要 .pfx/证书与密码）'
   },
   updater: {
-    supported: false,
-    reason: '未配置自动更新发布源/更新服务'
+    supported: true,
+    mode: 'check-only',
+    repo: `https://github.com/${GITHUB_REPO.owner}/${GITHUB_REPO.repo}`,
+    reason: '支持检查 GitHub 上的新版本（Releases，缺失时回落到 main 分支），不自动下载安装'
   },
   webSearch: {
     supported: false,

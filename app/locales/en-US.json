@@ -232,6 +232,27 @@
     "本轮用量": "This turn",
     "成员正在执行": "Members are working",
     "星界 · 后台运行中（点图标回到窗口）": "Astral Realm · Running in background (click the icon to return)",
-    "已取消": "Cancelled"
+    "已取消": "Cancelled",
+    "当前版本": "Current version",
+    "只在发现新版本时提示一次；点「以后再说」会在 3 天后再提醒。": "Notify only when a new version exists; \"Later\" snoozes for 3 days.",
+    "检查失败": "Check failed",
+    "检查中…": "Checking…",
+    "已是最新版本": "You are up to date",
+    "检查时间": "Checked at",
+    "忽略此版本": "Ignore this version",
+    "检查更新": "Check for updates",
+    "软件更新": "Software updates",
+    "查询中": "Checking",
+    "打开 GitHub": "Open GitHub",
+    "启动时自动检查更新": "Check for updates on startup",
+    "发现新版本": "New version found",
+    "检查更新失败": "Update check failed",
+    "还没有检查过": "Never checked",
+    "当前运行环境不支持检查更新": "Update checks are unavailable in this runtime",
+    "上次检查": "Last checked",
+    "未检查": "Not checked",
+    "已是最新": "Up to date",
+    "前往下载": "Open download",
+    "恢复提示": "Restore notification"
   }
 }

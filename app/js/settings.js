@@ -30,6 +30,7 @@ import {
 import { MODES, MAX_EVENTS } from './triggers-core.js'
 import { play as sfxPlay, config as sfxConfig, setConfig as setSfxConfig } from './sfx.js'
 import { availableLocales, currentLocale, setLocale, t } from './i18n.js'
+import { updateCard } from './updater.js'
 
 export function openSettings (tab = 'providers') {
   openModal({
@@ -1781,6 +1782,7 @@ function renderAbout (body) {
       h('div', { class: 'card-title' }, '星界 Astral Realm v' + state.version),
       h('div', { class: 'hint', text: '多 Agent 协作工作台。前端零依赖、无打包步骤，改文件即改行为。' })
     ),
+    updateCard(),
     h('div', { class: 'mini-row' }, h('span', {}, '程序目录'), h('span', { class: 'hint', text: state.dirs.app || '' })),
     h('div', { class: 'mini-row' }, h('span', {}, '配置目录'), h('span', { class: 'hint', text: state.dirs.config || '' })),
     h('div', { class: 'mini-row' }, h('span', {}, '节点'), h('span', { class: 'hint', text: navigator.userAgent.split(' ').slice(-2).join(' ') })),

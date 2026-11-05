@@ -766,6 +766,72 @@ test('界面语言包可扩展，英文覆盖核心界面且缺词回退中文',
   assert.match(i18n, /config\/locales/)
 })
 
+test('更新检查：版本比较与「发布 / 分支」两种来源', async () => {
+  const { compareVersions, checkForUpdate } = require('../electron/update-check.js')
+
+  assert.equal(compareVersions('0.1.0', 'v0.2.0'), -1)
+  assert.equal(compareVersions('0.2.0', '0.2'), 0)
+  assert.equal(compareVersions('v0.1.0', '0.1.0'), 0)
+  assert.equal(compareVersions('0.2.0', '0.2.0-beta'), 1, '正式版应高于同号预发布')
+
+  const releaseFetch = async (url) => {
+    if (url.endsWith('/releases/latest')) {
+      return {
+        status: 200,
+        data: {
+          tag_name: 'v0.3.0',
+          html_url: 'https://github.com/MoYu-CN/astral-realm/releases/tag/v0.3.0',
+          body: '修了一些问题',
+          published_at: '2026-11-01T00:00:00Z'
+        }
+      }
+    }
+    return { status: 404, data: null }
+  }
+  const byRelease = await checkForUpdate({ currentVersion: '0.1.0', fetchJson: releaseFetch, force: true })
+  assert.equal(byRelease.ok, true)
+  assert.equal(byRelease.source, 'release')
+  assert.equal(byRelease.latest, '0.3.0')
+  assert.equal(byRelease.hasUpdate, true)
+  assert.match(byRelease.url, /releases\/tag\/v0\.3\.0$/)
+
+  const pkg = Buffer.from(JSON.stringify({ name: 'astral-realm', version: '0.2.0' }), 'utf8').toString('base64')
+  const mainFetch = async (url) => {
+    if (url.endsWith('/releases/latest')) return { status: 404, data: null }
+    if (url.includes('/contents/package.json')) return { status: 200, data: { content: pkg, encoding: 'base64' } }
+    if (url.includes('/commits/main')) {
+      return {
+        status: 200,
+        data: { sha: 'abcdef1234567890', commit: { message: 'feat: 更新检查\n\n细节', author: { date: '2026-11-04T10:00:00Z' } } }
+      }
+    }
+    return { status: 404, data: null }
+  }
+  const byMain = await checkForUpdate({ currentVersion: '0.1.0', fetchJson: mainFetch, force: true })
+  assert.equal(byMain.ok, true)
+  assert.equal(byMain.source, 'main')
+  assert.equal(byMain.latest, '0.2.0')
+  assert.equal(byMain.commit.sha, 'abcdef1', '提交 SHA 应截断成 7 位')
+
+  const upToDate = await checkForUpdate({ currentVersion: '0.2.0', fetchJson: mainFetch, force: true })
+  assert.equal(upToDate.hasUpdate, false)
+
+  const limited = await checkForUpdate({ currentVersion: '0.1.0', force: true, fetchJson: async () => ({ status: 403, data: {} }) })
+  assert.equal(limited.ok, false)
+  assert.match(limited.error, /限流/)
+})
+
+test('关于页挂载更新卡片，IPC 通道与 preload 对齐', () => {
+  const root = path.join(__dirname, '..')
+  const settings = fs.readFileSync(path.join(root, 'app', 'js', 'settings.js'), 'utf8')
+  assert.match(settings, /import \{ updateCard \} from '\.\/updater\.js'/)
+  assert.match(settings, /updateCard\(\)/)
+  const preload = fs.readFileSync(path.join(root, 'electron', 'preload.js'), 'utf8')
+  assert.match(preload, /checkUpdate: .*'astral:update:check'/)
+  const main = fs.readFileSync(path.join(root, 'electron', 'main.js'), 'utf8')
+  assert.match(main, /ipcMain\.handle\('astral:update:check'/)
+})
+
 ;(async () => {
   for (const item of tests) {
     await item.fn()

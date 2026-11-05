@@ -24,6 +24,7 @@ contextBridge.exposeInMainWorld('astral', {
   auditList: (payload) => ipcRenderer.invoke('astral:audit:list', payload),
   auditCapabilities: () => ipcRenderer.invoke('astral:audit:capabilities'),
   buildInfo: () => ipcRenderer.invoke('astral:build:info'),
+  checkUpdate: (payload) => ipcRenderer.invoke('astral:update:check', payload || {}),
   capabilities: () => ipcRenderer.invoke('astral:capabilities'),
   exportDiagnostics: () => ipcRenderer.invoke('astral:diagnostics:export'),
   loadProjectSession: (id) => ipcRenderer.invoke('astral:projectSession:load', id),

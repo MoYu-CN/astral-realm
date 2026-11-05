@@ -2309,6 +2309,24 @@ input[type='number'].input:focus {
 }
 .tag.on { color: var(--ok); border-color: color-mix(in srgb, var(--ok) 30%, transparent); }
 
+/* 更新说明：release notes 或最新提交，长文本内部滚动，不撑高设置面板 */
+.update-notes {
+  margin-top: 9px;
+  max-height: 130px;
+  overflow: auto;
+  padding: 9px 10px;
+  border: 1px solid var(--line);
+  border-radius: var(--radius-sm);
+  background: color-mix(in srgb, var(--fg-0) 4%, transparent);
+  font-size: calc(11.5px * var(--ui-scale));
+  line-height: 1.66;
+  color: var(--fg-1);
+  white-space: pre-wrap;
+  word-break: break-word;
+}
+
+.update-notes:empty { display: none; }
+
 .checkline {
   display: flex;
   align-items: flex-start;
